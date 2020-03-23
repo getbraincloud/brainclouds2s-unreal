@@ -1,5 +1,5 @@
 # brainCloud S2S C++ library for Unreal
-Tested in Unreal 2.24
+Tested in Unreal 4.24
 
 ## Installation:
 
