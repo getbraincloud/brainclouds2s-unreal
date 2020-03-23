@@ -1,4 +1,4 @@
-#include "BrainCloudS2S.h"
+#include "brainclouds2s.h"
 
 #include "Logging/LogMacros.h"
 #include "Http.h"
@@ -224,7 +224,7 @@ void UBrainCloudS2S::runCallbacks()
                 else
                 {
                     // If it's a session expired, we disconnect
-                    if (jsonMessage->HasField("reason_code"))
+                    if (jsonMessage && jsonMessage->HasField("reason_code"))
                     {
                         if (jsonMessage->GetIntegerField("reason_code") == SERVER_SESSION_EXPIRED)
                         {
@@ -238,7 +238,7 @@ void UBrainCloudS2S::runCallbacks()
                         }
                     }
 
-                    UE_LOG(LogBrainCloudS2S, Error, TEXT("S2S Failed: %s"), *responseMessage);
+                    UE_LOG(LogBrainCloudS2S, Error, TEXT("S2S Failed: %s"), *responseBody);
                     pActiveRequest->pHTTPRequest->CancelRequest();
 
                     // Callback
