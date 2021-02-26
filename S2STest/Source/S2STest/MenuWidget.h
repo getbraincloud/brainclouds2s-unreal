@@ -17,8 +17,10 @@ class S2STEST_API UMenuWidget : public UUserWidget
 	GENERATED_BODY()
 
 protected:
-	UBrainCloudS2S* _bc;
+	//UBrainCloudS2S* _bc;
+	TSharedPtr<UBrainCloudS2S> _bc;
 	FString bcLogs;
+	int lastServerTime = 0;
 
 	UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
 		class UTextBlock* LogText;
@@ -32,10 +34,21 @@ protected:
 	UFUNCTION(BlueprintCallable, Category = "BrainCloudS2S")
 		void RunCallbacks();
 
-	//callbacks
-	void onTestCallback(const FString& jsonString);
+	//tests as callbacks
 	void onTestAuthCallback(const FString& jsonString);
+	void onTestMultipleAuthCallback(const FString& jsonString);
+	void onTestAuthAndRequestCallback(const FString& jsonString);
+	void onTestNullAuthAndRequestCallback(const FString& jsonString);
+	void onTestQueueCallback(const FString& jsonString);
+	void onTestQueueWithFailCallback(const FString& jsonString);
+	void onTestRandomFailureCallback(const FString& jsonString);
+
+	void startWaitTimer(int timeSeconds);
 
 	void NativeConstruct() override;
 
+	int m_successCounter = 0;
+
 };
+
+DECLARE_LOG_CATEGORY_EXTERN(LogBrainCloudS2STest, Log, All);
