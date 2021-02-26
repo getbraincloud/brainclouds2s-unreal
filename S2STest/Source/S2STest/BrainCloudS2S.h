@@ -12,16 +12,16 @@
 #include <memory>
 #include <string>
 
-#include "BrainCloudS2S.generated.h"
+//#include "BrainCloudS2S.generated.h"
 
 class IHttpRequest;
 
 using US2SCallback = std::function<void(const FString&)>;
 
-UCLASS(MinimalAPI)
-class UBrainCloudS2S : public UObject
+//UCLASS(MinimalAPI)
+class UBrainCloudS2S //: public UObject
 {
-    GENERATED_BODY()
+    //GENERATED_BODY()
 
 public:
     //Base Constructor for those using NewObject or createSubobject
@@ -32,7 +32,7 @@ public:
         const FString& serverName,
         const FString& serverSecret,
         const FString& url,
-        bool autoAuth = true
+        bool autoAuth
     );
 
     virtual ~UBrainCloudS2S();
@@ -49,7 +49,7 @@ public:
         const FString& serverName,
         const FString& serverSecret,
         const FString& url,
-        bool autoAuth = true
+        bool autoAuth
     );
 
     /*
@@ -79,18 +79,9 @@ public:
     void authenticate(const US2SCallback& callback);
 
     /*
-    * Same as authenticate, but waits for result. This call is blocking.
-    * @return Authenticate result
+    * Disconnect
     */
-    //virtual FString authenticateSync() = 0;
-
-    /*
-    * Send an S2S request, and wait for result. This call is blocking.
-    * @param json Content to be sent
-    * @return callback Callback function
-    * @return Request result
-    */
-    //virtual FString requestSync(const FString& json) = 0;
+    void disconnect();
 
     enum class State : uint8 {
         Disconnected = 0,
@@ -106,9 +97,7 @@ private:
         TSharedPtr<IHttpRequest> pHTTPRequest;
     };
 
-    void disconnect();
-
-    void sendRequest(const TSharedPtr<Request> &pRequest);
+    void queueRequest(const TSharedPtr<Request> &pRequest);
     void sendHeartbeat();
 
     void onAuthenticateCallback(const FString &jsonString);
@@ -124,9 +113,8 @@ private:
     TSharedPtr<Request> _activeRequest;
     TSharedPtr<Request> _nullActiveRequest;
     State _state = State::Disconnected;
-    bool _autoAuth = true;
+    bool _autoAuth = false;
     bool _logEnabled = false;
-    bool _authenticated = false;
     int32 _packetId = 0;
     FString _sessionId = "";
     

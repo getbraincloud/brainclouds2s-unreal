@@ -16,14 +16,21 @@ static const int SERVER_SESSION_EXPIRED = 40365;
 // 30 minutes heartbeat interval
 static const int HEARTBEAT_INTERVALE_S = 60.0 * 30.0;
 
+UBrainCloudS2S::UBrainCloudS2S()
+{
+}
+
 UBrainCloudS2S::UBrainCloudS2S(const FString& appId,
-                               const FString& serverName,
-                               const FString& serverSecret,
-                               const FString& url)
+    const FString& serverName,
+    const FString& serverSecret,
+    const FString& url,
+    bool autoAuth)
     : _appId(appId)
     , _serverName(serverName)
     , _serverSecret(serverSecret)
     , _url(url)
+    , _autoAuth(autoAuth)
+    , _state(State::Disconnected)
     , _heartbeatInverval(HEARTBEAT_INTERVALE_S)
 {
 }
@@ -40,9 +47,57 @@ UBrainCloudS2S::~UBrainCloudS2S()
     _requestQueue.Empty();
 }
 
+void UBrainCloudS2S::Init(const FString& appId,
+    const FString& serverName,
+    const FString& serverSecret,
+    const FString& url,
+    bool autoAuth)
+{
+    _appId = appId;
+    _serverName = serverName;
+    _serverSecret = serverSecret;
+    _url = url;
+    _autoAuth = autoAuth;
+    _state = State::Disconnected;
+    _heartbeatInverval = HEARTBEAT_INTERVALE_S;
+}
+
+void UBrainCloudS2S::authenticate(const US2SCallback& callback)
+{
+    if (_state != State::Authenticated)
+    {
+        _state = State::Authenitcating;
+        FString jsonAuthString = "{\"service\":\"authenticationV2\",\"operation\":\"AUTHENTICATE\",\"data\":{\"appId\":\"" + _appId + "\",\"serverName\":\"" + _serverName + "\",\"serverSecret\":\"" + _serverSecret + "\"}}";
+        if (callback != NULL)
+        {
+            TSharedPtr<Request> pAuthRequest(new Request{
+                jsonAuthString,
+                callback,
+                nullptr
+            });
+            _requestQueue.Add(pAuthRequest);
+            queueRequest(pAuthRequest);
+        }
+        else
+        {
+            TSharedPtr<Request> pAuthRequest(new Request{
+                jsonAuthString,
+                std::bind(&UBrainCloudS2S::onAuthenticateCallback, this, std::placeholders::_1),
+                nullptr
+            });
+            _requestQueue.Add(pAuthRequest);
+            queueRequest(pAuthRequest);
+        }
+
+    }
+}
+
 void UBrainCloudS2S::disconnect()
 {
-    _authenticated = false;
+    _state = State::Disconnected;
+    _packetId = 0;
+    _sessionId = "";
+
 }
 
 void UBrainCloudS2S::setLogEnabled(bool enabled)
@@ -59,10 +114,10 @@ void UBrainCloudS2S::sendHeartbeat()
         nullptr
         });
     _requestQueue.Add(pAuthRequest);
-    sendRequest(pAuthRequest);
+    queueRequest(pAuthRequest);
 }
 
-void UBrainCloudS2S::sendRequest(const TSharedPtr<Request> &pRequest)
+void UBrainCloudS2S::queueRequest(const TSharedPtr<Request> &pRequest)
 {
     FString dataString = "{\"packetId\":" + FString::FromInt(_packetId);
     if (_sessionId.Len())
@@ -88,18 +143,13 @@ void UBrainCloudS2S::sendRequest(const TSharedPtr<Request> &pRequest)
 
 void UBrainCloudS2S::request(const FString& jsonString, const US2SCallback& callback)
 {
-    // If not authenticated, do that first.
-    // Also make sure hnothing else is queue, if it's queued then auth is probably in flight.
-    if (!_authenticated && !_requestQueue.Num())
+    // If autoAuth is on 
+    if (_autoAuth)
     {
-        FString jsonAuthString = "{\"service\":\"authenticationV2\",\"operation\":\"AUTHENTICATE\",\"data\":{\"appId\":\"" + _appId + "\",\"serverName\":\"" + _serverName + "\",\"serverSecret\":\"" + _serverSecret + "\"}}";
-        TSharedPtr<Request> pAuthRequest(new Request{ 
-            jsonAuthString,
-            std::bind(&UBrainCloudS2S::onAuthenticateCallback, this, std::placeholders::_1), 
-            nullptr 
-        });
-        _requestQueue.Add(pAuthRequest);
-        sendRequest(pAuthRequest);
+        if ( _state != State::Authenticated && !_requestQueue.Num())
+        {
+            authenticate(std::bind(&UBrainCloudS2S::onAuthenticateCallback, this, std::placeholders::_1));
+        }
     }
 
     // Queue the request
@@ -107,9 +157,9 @@ void UBrainCloudS2S::request(const FString& jsonString, const US2SCallback& call
     _requestQueue.Add(pRequest);
 
     // If we are the only thing in queue, send it now
-    if (_requestQueue.Num() == 1)
+    if (_requestQueue.Num() == 1 && _state == State::Authenticated)
     {
-        sendRequest(pRequest);
+        queueRequest(pRequest);
     }
 }
 
@@ -132,41 +182,64 @@ void UBrainCloudS2S::onHeartbeatCallback(const FString &jsonString)
     disconnect(); // Something went wrong
 }
 
-void UBrainCloudS2S::onAuthenticateCallback(const FString &jsonString)
+void UBrainCloudS2S::CheckAuthCredentials(TSharedPtr<FJsonObject> authResponse)
 {
-    // Try to deserialize the json
-    TSharedRef<TJsonReader<TCHAR>> reader = TJsonReaderFactory<TCHAR>::Create(jsonString);
-    TSharedPtr<FJsonObject> pMessage = MakeShareable(new FJsonObject());
-    if (FJsonSerializer::Deserialize(reader, pMessage))
+    if (authResponse && authResponse->HasField("data"))
     {
-        if (pMessage->HasField("data"))
+        const auto& pData = authResponse->GetObjectField("data");
+        if (pData->HasField("heartbeatSeconds"))
         {
-            const auto &pData = pMessage->GetObjectField("data");
-            if (pData->HasField("heartbeatSeconds"))
-            {
-                _heartbeatInverval = pData->GetNumberField("heartbeatSeconds");
-            }
-            if (pData->HasField("sessionId"))
-            {
-                _sessionId = pData->GetStringField("sessionId");
-            }
-            _heartbeatStartTime = FPlatformTime::Seconds();
-            _authenticated = true;
-            UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticated"));
+            _heartbeatInverval = pData->GetNumberField("heartbeatSeconds");
+            //_heartbeatInverval = 300;
         }
+        if (pData->HasField("sessionId"))
+        {
+            _sessionId = pData->GetStringField("sessionId");
+        }
+        _heartbeatStartTime = FPlatformTime::Seconds();
+        _state = State::Authenticated;
+        UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticated"));
     }
     else
     {
-        // msg is from braincloud, this should never happen
-        UE_LOG(LogBrainCloudS2S, Error, TEXT("S2S Invalid JSON: %s"), *jsonString);
+        UE_LOG(LogBrainCloudS2S, Error, TEXT("S2S Failed To Authenticate"));
+    }
+}
+
+void UBrainCloudS2S::onAuthenticateCallback(const FString &jsonString)
+{
+    if (_state != State::Authenticated)
+    {
+        // Try to deserialize the json
+        TSharedRef<TJsonReader<TCHAR>> reader = TJsonReaderFactory<TCHAR>::Create(jsonString);
+        TSharedPtr<FJsonObject> pMessage = MakeShareable(new FJsonObject());
+        if (FJsonSerializer::Deserialize(reader, pMessage))
+        {
+            CheckAuthCredentials(pMessage);
+        }
+        else
+        {
+            // msg is from braincloud, this should never happen
+            UE_LOG(LogBrainCloudS2S, Error, TEXT("S2S Invalid JSON: %s"), *jsonString);
+        }
     }
 }
 
 void UBrainCloudS2S::runCallbacks()
 {
-    if (_requestQueue.Num())
+    if (_activeRequest == nullptr)
     {
-        auto pActiveRequest = _requestQueue[0];
+        if (_requestQueue.Num())
+        {
+            _activeRequest = _requestQueue[0];
+        }
+    }
+    else 
+    {
+        //UE_LOG(LogBrainCloudS2S, Log, TEXT("Number of Waiting Requests, %d"), _requestQueue.Num()); //Check num request in queue
+
+        //auto pActiveRequest = _requestQueue[0];
+        auto pActiveRequest = _activeRequest;
         EHttpRequestStatus::Type status = pActiveRequest->pHTTPRequest->GetStatus();
 
         if (status == EHttpRequestStatus::Succeeded)
@@ -192,6 +265,11 @@ void UBrainCloudS2S::runCallbacks()
                             jsonMessage = messages[0]->AsObject();
                             TSharedRef<TJsonWriter<> > writer = TJsonWriterFactory<>::Create(&responseMessage);
                             FJsonSerializer::Serialize(jsonMessage.ToSharedRef(), writer);
+
+                            if (_state != State::Authenticated) // will only do this on an auth call
+                            {
+                                CheckAuthCredentials(jsonMessage);
+                            }
                         }
                     }
                 }
@@ -216,9 +294,11 @@ void UBrainCloudS2S::runCallbacks()
 
                     // Remove and process next
                     _requestQueue.RemoveAt(0);
+                    _activeRequest = nullptr;//dispose of the current active request
+
                     if (_requestQueue.Num())
                     {
-                        sendRequest(_requestQueue[0]);
+                        queueRequest(_requestQueue[0]);
                     }
                 }
                 else
@@ -233,7 +313,11 @@ void UBrainCloudS2S::runCallbacks()
                             pActiveRequest->pHTTPRequest->CancelRequest();
                             pActiveRequest->pHTTPRequest.Reset();
                             disconnect();
-                            sendRequest(pActiveRequest); // Re-request, dont dequeue
+                            if (!_autoAuth) //need to re-auth here for them if we want to re-request and not dequeue
+                            {
+                                authenticate(std::bind(&UBrainCloudS2S::onAuthenticateCallback, this, std::placeholders::_1));
+                            }
+                            queueRequest(pActiveRequest); // Re-request, dont dequeue, if auto auth is true, it will not need to have an additional auth
                             return;
                         }
                     }
@@ -249,9 +333,11 @@ void UBrainCloudS2S::runCallbacks()
 
                     // Remove and process next
                     _requestQueue.RemoveAt(0);
+                    _activeRequest = nullptr; //dispose of the current active request
+
                     if (_requestQueue.Num())
                     {
-                        sendRequest(_requestQueue[0]);
+                        queueRequest(_requestQueue[0]);
                     }
                 }
             }
@@ -264,14 +350,16 @@ void UBrainCloudS2S::runCallbacks()
             // Callback
             if (pActiveRequest->callback)
             {
-                pActiveRequest->callback("{\"status_code\":900,\"message\":\"FTTP Request failed\"}");
+                pActiveRequest->callback("{\"status_code\":900,\"message\":\"HTTP Request failed\"}");
             }
 
             // Remove and process next
             _requestQueue.RemoveAt(0);
+            _activeRequest = nullptr; //dispose of the current active request
+
             if (_requestQueue.Num())
             {
-                sendRequest(_requestQueue[0]);
+                queueRequest(_requestQueue[0]);
             }
         }
         else if (status == EHttpRequestStatus::Processing)
@@ -280,8 +368,8 @@ void UBrainCloudS2S::runCallbacks()
         }
     }
 
-    // Send heartbeat if we have to
-    if (_authenticated)
+    //Send heartbeat if we have to
+    if (_state == State::Authenticated)
     {
         auto now = FPlatformTime::Seconds();
         auto timeDiff = now - _heartbeatStartTime;
