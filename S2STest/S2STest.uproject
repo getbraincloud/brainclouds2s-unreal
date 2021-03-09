@@ -1,0 +1,17 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "4.25",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "S2STest",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine",
+				"UMG"
+			]
+		}
+	]
+}
