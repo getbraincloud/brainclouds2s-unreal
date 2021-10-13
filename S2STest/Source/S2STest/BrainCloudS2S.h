@@ -100,7 +100,11 @@ private:
     {
         FString jsonString;
         US2SCallback callback;
+#if ENGINE_MAJOR_VERSION < 5 && ENGINE_MINOR_VERSION > 25
+        TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> pHTTPRequest;
+#else
         TSharedPtr<IHttpRequest> pHTTPRequest;
+#endif
     };
 
     void queueRequest(const TSharedPtr<Request> &pRequest);
