@@ -15,9 +15,9 @@ void UMenuWidget::NativeConstruct()
 	FString appId = "20001";
 	FString serverName = "TestServer";
 	FString serverSecret = "2ddf8355-c516-48dd-a6b0-e35bd75fac80";
-	FString url = "https://internal.braincloudservers.com/s2sdispatcher";
+	FString url = "https://api.internal.braincloudservers.com/s2sdispatcher";
 
-	_bc = MakeShareable(new UBrainCloudS2S("20001", "TestServer", "2ddf8355-c516-48dd-a6b0-e35bd75fac80", "https://sharedprod.braincloudservers.com/s2sdispatcher", false));
+	_bc = MakeShareable(new UBrainCloudS2S("20001", "TestServer", "2ddf8355-c516-48dd-a6b0-e35bd75fac80", "https://api.braincloudservers.com/s2sdispatcher", false));
 	_bc->Init(appId, serverName, serverSecret, url, false);
 	_bc->setLogEnabled(true);
 
