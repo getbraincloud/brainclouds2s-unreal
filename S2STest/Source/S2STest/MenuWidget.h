@@ -3,11 +3,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "BrainCloudS2S.h"
 #include "Blueprint/UserWidget.h"
+#include "BrainCloudS2S/S2SRTTComms.h"
+#include "BrainCloudS2S/BrainCloudS2S.h"
 #include "MenuWidget.generated.h"
 
-
+DECLARE_DYNAMIC_DELEGATE_OneParam(FS2SRTTCallbackDelegate, const FString&, JsonData);
 /**
  * 
  */
@@ -17,36 +18,38 @@ class S2STEST_API UMenuWidget : public UUserWidget
 	GENERATED_BODY()
 
 protected:
-	//UBrainCloudS2S* _bc;
-	TSharedPtr<UBrainCloudS2S> _bc;
-	FString bcLogs;
+	US2SRTTComms *_bc;
 	int lastServerTime = 0;
-
-	UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
-		class UTextBlock* LogText;
-
-	UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
-		class UButton* RunTestButton;
-
-	UFUNCTION()
-		void OnRunTestButtonClicked();
 
 	UFUNCTION(BlueprintCallable, Category = "BrainCloudS2S")
 		void RunCallbacks();
 
-	//tests as callbacks
-	void onTestAuthCallback(const FString& jsonString);
-	void onTestMultipleAuthCallback(const FString& jsonString);
-	void onTestAuthAndRequestCallback(const FString& jsonString);
-	void onTestNullAuthAndRequestCallback(const FString& jsonString);
-	void onTestQueueCallback(const FString& jsonString);
-	void onTestQueueWithFailCallback(const FString& jsonString);
-	void onTestRandomFailureCallback(const FString& jsonString);
+	UFUNCTION(BlueprintCallable, Category = "BrainCloudS2S")
+		void TestAuthentication(FS2SRTTCallbackDelegate callback);
 
-	void startWaitTimer(int timeSeconds);
+	UFUNCTION(BlueprintCallable, Category = "BrainCloudS2S")
+		void TestEnableRTT(FS2SRTTCallbackDelegate successCallback, FS2SRTTCallbackDelegate failureCallback, FS2SRTTCallbackDelegate rttCallback);
+
+	UFUNCTION(BlueprintCallable, Category = "BrainCloudS2S")
+		void TestRTTMessage(FS2SRTTCallbackDelegate callback);
+
+	UFUNCTION(BlueprintCallable, Category = "BrainCloudS2S")
+		void TestDisableRTT(FS2SRTTCallbackDelegate callback);
+
+	UFUNCTION(BlueprintCallable, Category = "BrainCloudS2S")
+		void TestJoinSysChannel(FS2SRTTCallbackDelegate callback);
+
+	UFUNCTION(BlueprintCallable, Category = "JsonUtil")
+		bool isError(const FString& jsonMessage);
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "S2S Test")
+		void LogMessage(const FString& message);
+
 
 	void NativeConstruct() override;
 
+	
+	FString appId;
 	int m_successCounter = 0;
 
 };
