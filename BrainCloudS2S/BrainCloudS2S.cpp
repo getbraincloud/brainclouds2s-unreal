@@ -1,5 +1,4 @@
-#include "brainclouds2s.h"
-
+#include "BrainCloudS2S.h"
 #include "Logging/LogMacros.h"
 #include "Http.h"
 #include "Json.h"
@@ -14,7 +13,7 @@ DEFINE_LOG_CATEGORY(LogBrainCloudS2S);
 static const int SERVER_SESSION_EXPIRED = 40365;
 
 // 30 minutes heartbeat interval
-static const int HEARTBEAT_INTERVALE_S = 60.0 * 30.0;
+static const int HEARTBEAT_INTERVALE_S = 60 * 30;
 
 UBrainCloudS2S::UBrainCloudS2S()
 {
@@ -25,14 +24,14 @@ UBrainCloudS2S::UBrainCloudS2S(const FString& appId,
     const FString& serverSecret,
     const FString& url,
     bool autoAuth)
-    : _appId(appId)
-    , _serverName(serverName)
-    , _serverSecret(serverSecret)
-    , _url(url)
-    , _autoAuth(autoAuth)
-    , _state(State::Disconnected)
-    , _heartbeatInverval(HEARTBEAT_INTERVALE_S)
 {
+    _sessionData.appId = appId;
+    _sessionData.serverName = serverName;
+    _sessionData.serverSecret = serverSecret;
+    _sessionData.url = url;
+    _sessionData.state = S2SState::Disconnected;
+    _autoAuth = autoAuth;
+    _sessionData.heartbeatInterval = HEARTBEAT_INTERVALE_S;
 }
 
 UBrainCloudS2S::~UBrainCloudS2S()
@@ -53,26 +52,26 @@ void UBrainCloudS2S::Init(const FString& appId,
     const FString& url,
     bool autoAuth)
 {
-    _appId = appId;
-    _serverName = serverName;
-    _serverSecret = serverSecret;
-    _url = url;
+    _sessionData.appId = appId;
+    _sessionData.serverName = serverName;
+    _sessionData.serverSecret = serverSecret;
+    _sessionData.url = url;
     _autoAuth = autoAuth;
-    _state = State::Disconnected;
-    _heartbeatInverval = HEARTBEAT_INTERVALE_S;
+    _sessionData.state = S2SState::Disconnected;
+    _sessionData.heartbeatInterval = HEARTBEAT_INTERVALE_S;
 }
 
 void UBrainCloudS2S::authenticate(const US2SCallback& callback)
 {
-    if (_state != State::Authenticated)
+    if (_sessionData.state != S2SState::Authenticated)
     {
-        _state = State::Authenitcating;
-        FString jsonAuthString = "{\"service\":\"authenticationV2\",\"operation\":\"AUTHENTICATE\",\"data\":{\"appId\":\"" + _appId + "\",\"serverName\":\"" + _serverName + "\",\"serverSecret\":\"" + _serverSecret + "\"}}";
+        _sessionData.state = S2SState::Authenticating;
+        FString jsonAuthString = "{\"service\":\"authenticationV2\",\"operation\":\"AUTHENTICATE\",\"data\":{\"appId\":\"" + _sessionData.appId + "\",\"serverName\":\"" + _sessionData.serverName + "\",\"serverSecret\":\"" + _sessionData.serverSecret + "\"}}";
         TSharedPtr<Request> pAuthRequest(new Request{
             jsonAuthString,
             callback,
             nullptr
-        });
+            });
         _requestQueue.Add(pAuthRequest);
         queueRequest(pAuthRequest);
     }
@@ -85,10 +84,20 @@ void UBrainCloudS2S::authenticate()
 
 void UBrainCloudS2S::disconnect()
 {
-    _state = State::Disconnected;
-    _packetId = 0;
-    _sessionId = "";
+    _sessionData.state = S2SState::Disconnected;
+    _sessionData.packetId = 0;
+    _sessionData.sessionId = "";
 
+}
+
+FString UBrainCloudS2S::getSessionID()
+{
+    return _sessionData.sessionId;
+}
+
+US2SSessionData UBrainCloudS2S::getSessionData()
+{
+    return _sessionData;
 }
 
 void UBrainCloudS2S::setLogEnabled(bool enabled)
@@ -108,12 +117,12 @@ void UBrainCloudS2S::sendHeartbeat()
     queueRequest(pAuthRequest);
 }
 
-void UBrainCloudS2S::queueRequest(const TSharedPtr<Request> &pRequest)
+void UBrainCloudS2S::queueRequest(const TSharedPtr<Request>& pRequest)
 {
-    FString dataString = "{\"packetId\":" + FString::FromInt(_packetId);
-    if (_sessionId.Len())
+    FString dataString = "{\"packetId\":" + FString::FromInt(_sessionData.packetId);
+    if (_sessionData.sessionId.Len())
     {
-        dataString += ",\"sessionId\":\"" + _sessionId + "\"";
+        dataString += ",\"sessionId\":\"" + _sessionData.sessionId + "\"";
     }
     dataString += ",\"messages\":[" + pRequest->jsonString + "]}";
 
@@ -123,21 +132,22 @@ void UBrainCloudS2S::queueRequest(const TSharedPtr<Request> &pRequest)
     }
 
     pRequest->pHTTPRequest = FHttpModule::Get().CreateRequest();
-    pRequest->pHTTPRequest->SetURL(_url);
+    pRequest->pHTTPRequest->SetURL(_sessionData.url);
     pRequest->pHTTPRequest->SetVerb(TEXT("POST"));
     pRequest->pHTTPRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
     pRequest->pHTTPRequest->SetContentAsString(dataString);
     pRequest->pHTTPRequest->ProcessRequest();
 
-    ++_packetId;
+    ++_sessionData.packetId;
 }
 
 void UBrainCloudS2S::request(const FString& jsonString, const US2SCallback& callback)
 {
     // If autoAuth is on 
+    UE_LOG(LogBrainCloudS2S, Log, TEXT("[S2SRequest] autoAuth: %s \n"), _autoAuth ? TEXT("true") : TEXT("false"));
     if (_autoAuth)
     {
-        if ( _state != State::Authenticated && !_requestQueue.Num())
+        if (_sessionData.state != S2SState::Authenticated && !_requestQueue.Num())
         {
             authenticate(std::bind(&UBrainCloudS2S::onAuthenticateCallback, this, std::placeholders::_1));
         }
@@ -148,13 +158,13 @@ void UBrainCloudS2S::request(const FString& jsonString, const US2SCallback& call
     _requestQueue.Add(pRequest);
 
     // If we are the only thing in queue, send it now
-    if (_requestQueue.Num() == 1 && _state == State::Authenticated)
+    if (_requestQueue.Num() == 1 && _sessionData.state == S2SState::Authenticated)
     {
         queueRequest(pRequest);
     }
 }
 
-void UBrainCloudS2S::onHeartbeatCallback(const FString &jsonString)
+void UBrainCloudS2S::onHeartbeatCallback(const FString& jsonString)
 {
     // Try to deserialize the json
     TSharedRef<TJsonReader<TCHAR>> reader = TJsonReaderFactory<TCHAR>::Create(jsonString);
@@ -180,26 +190,32 @@ void UBrainCloudS2S::CheckAuthCredentials(TSharedPtr<FJsonObject> authResponse)
         const auto& pData = authResponse->GetObjectField("data");
         if (pData->HasField("heartbeatSeconds"))
         {
-            _heartbeatInverval = pData->GetNumberField("heartbeatSeconds");
+            _sessionData.heartbeatInterval = pData->GetNumberField("heartbeatSeconds");
             //_heartbeatInverval = 300;
         }
         if (pData->HasField("sessionId"))
         {
-            _sessionId = pData->GetStringField("sessionId");
+            _sessionData.sessionId = pData->GetStringField("sessionId");
         }
-        _heartbeatStartTime = FPlatformTime::Seconds();
-        _state = State::Authenticated;
-        UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticated"));
+        _sessionData.heartbeatStartTime = FPlatformTime::Seconds();
+        _sessionData.state = S2SState::Authenticated;
+
+        if (_logEnabled)
+            UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticated - set heartbeatInterval to: %d"), _sessionData.heartbeatInterval);
     }
     else
     {
-        UE_LOG(LogBrainCloudS2S, Error, TEXT("S2S Failed To Authenticate"));
+        if (_logEnabled)
+            UE_LOG(LogBrainCloudS2S, Error, TEXT("S2S Failed To Authenticate"));
     }
 }
 
-void UBrainCloudS2S::onAuthenticateCallback(const FString &jsonString)
+void UBrainCloudS2S::onAuthenticateCallback(const FString& jsonString)
 {
-    if (_state != State::Authenticated)
+    if(_logEnabled)
+        UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticate result: %s"), *jsonString);
+
+    if (_sessionData.state != S2SState::Authenticated)
     {
         // Try to deserialize the json
         TSharedRef<TJsonReader<TCHAR>> reader = TJsonReaderFactory<TCHAR>::Create(jsonString);
@@ -218,6 +234,7 @@ void UBrainCloudS2S::onAuthenticateCallback(const FString &jsonString)
 
 void UBrainCloudS2S::runCallbacks()
 {
+    //UE_LOG(LogTemp, Log, TEXT("Running callbacks"));
     if (_activeRequest == nullptr)
     {
         if (_requestQueue.Num())
@@ -225,9 +242,10 @@ void UBrainCloudS2S::runCallbacks()
             _activeRequest = _requestQueue[0];
         }
     }
-    else 
+    else
     {
-        //UE_LOG(LogBrainCloudS2S, Log, TEXT("Number of Waiting Requests, %d"), _requestQueue.Num()); //Check num request in queue
+        if(_logEnabled)
+            UE_LOG(LogBrainCloudS2S, Log, TEXT("Number of Waiting Requests, %d"), _requestQueue.Num()); //Check num request in queue
 
         //auto pActiveRequest = _requestQueue[0];
         auto pActiveRequest = _activeRequest;
@@ -239,7 +257,7 @@ void UBrainCloudS2S::runCallbacks()
             if (resp.IsValid())
             {
                 auto responseCode = resp->GetResponseCode();
-                const auto &responseBody = resp->GetContentAsString();
+                const auto& responseBody = resp->GetContentAsString();
                 FString responseMessage;
 
                 // Get the inner body of the message
@@ -250,14 +268,14 @@ void UBrainCloudS2S::runCallbacks()
                 {
                     if (jsonPacket->HasField("messageResponses"))
                     {
-                        const auto &messages = jsonPacket->GetArrayField("messageResponses");
+                        const auto& messages = jsonPacket->GetArrayField("messageResponses");
                         if (messages.Num())
                         {
                             jsonMessage = messages[0]->AsObject();
                             TSharedRef<TJsonWriter<> > writer = TJsonWriterFactory<>::Create(&responseMessage);
                             FJsonSerializer::Serialize(jsonMessage.ToSharedRef(), writer);
 
-                            if (_state != State::Authenticated) // will only do this on an auth call
+                            if (_sessionData.state != S2SState::Authenticated) // will only do this on an auth call
                             {
                                 CheckAuthCredentials(jsonMessage);
                             }
@@ -360,14 +378,19 @@ void UBrainCloudS2S::runCallbacks()
     }
 
     //Send heartbeat if we have to
-    if (_state == State::Authenticated)
+    if (_sessionData.state == S2SState::Authenticated)
     {
         auto now = FPlatformTime::Seconds();
-        auto timeDiff = now - _heartbeatStartTime;
-        if (timeDiff >= _heartbeatInverval)
+        auto timeDiff = now - _sessionData.heartbeatStartTime;
+
+        FString timeDiffstr = FString::SanitizeFloat(timeDiff);
+        FString heartbeatIntervalStr = FString::SanitizeFloat(_sessionData.heartbeatInterval);
+        FString heartbeatStartTimeStr = FString::SanitizeFloat(_sessionData.heartbeatStartTime);
+
+        if (timeDiff >= _sessionData.heartbeatInterval)
         {
             sendHeartbeat();
-            _heartbeatStartTime = now;
+            _sessionData.heartbeatStartTime = now;
         }
     }
 }

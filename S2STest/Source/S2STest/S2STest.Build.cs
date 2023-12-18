@@ -8,7 +8,7 @@ public class S2STest : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "WebSockets" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "JsonUtilities", "HTTP", "Json" });
 

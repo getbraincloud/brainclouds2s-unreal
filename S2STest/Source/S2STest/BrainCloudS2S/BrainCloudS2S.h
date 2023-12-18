@@ -1,7 +1,4 @@
-/*
-    2020 @ bitheads inc.
-    Author: David St-Louis
-*/
+// Copyright 2023 bitHeads, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -12,20 +9,39 @@
 #include <memory>
 #include <string>
 
-//#include "BrainCloudS2S.generated.h"
+/**
+ * 
+ */
 
 class IHttpRequest;
 
 using US2SCallback = std::function<void(const FString&)>;
 
-//UCLASS(MinimalAPI)
-class UBrainCloudS2S //: public UObject
-{
-    //GENERATED_BODY()
+enum S2SState : uint8 {
+    Disconnected = 0,
+    Authenticating = 1,
+    Authenticated = 2
+};
 
+struct US2SSessionData
+{
+    FString appId;
+    FString serverName;
+    FString serverSecret;
+    FString url;
+    FString sessionId;
+    int32 packetId = 0;
+    double heartbeatStartTime = 0;
+    double heartbeatInterval;
+    S2SState state = S2SState::Disconnected;
+};
+
+
+
+class UBrainCloudS2S
+{
 public:
-    //Base Constructor for those using NewObject or createSubobject
-    UBrainCloudS2S();
+	UBrainCloudS2S();
 
     //Alternate constructor for those using MakeShareable
     UBrainCloudS2S(const FString& appId,
@@ -35,7 +51,7 @@ public:
         bool autoAuth
     );
 
-    virtual ~UBrainCloudS2S();
+	virtual ~UBrainCloudS2S();
 
     /*
      * INIT - used to initialize s2s app settings if needed.
@@ -63,7 +79,7 @@ public:
      * @param json Content to be sent
      * @param callback Callback function
      */
-    void request(const FString &jsonString, const US2SCallback &callback);
+    void request(const FString& jsonString, const US2SCallback& callback);
 
     /*
      * Update and perform callbacks on the calling thread.
@@ -79,7 +95,7 @@ public:
     void authenticate(const US2SCallback& callback);
 
     /*
-    Authenticate without custom callback, it will default to using 
+    Authenticate without custom callback, it will default to using
     ours instead.
     */
     void authenticate();
@@ -89,43 +105,32 @@ public:
     */
     void disconnect();
 
-    enum class State : uint8 {
-        Disconnected = 0,
-        Authenitcating = 1,
-        Authenticated = 2
-    };
+    FString getSessionID();
+
+    US2SSessionData getSessionData();
 
 private:
     struct Request
     {
         FString jsonString;
         US2SCallback callback;
-        TSharedPtr<IHttpRequest> pHTTPRequest;
+        TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> pHTTPRequest;
     };
 
-    void queueRequest(const TSharedPtr<Request> &pRequest);
+    void queueRequest(const TSharedPtr<Request>& pRequest);
     void sendHeartbeat();
 
-    void onAuthenticateCallback(const FString &jsonString);
-    void onHeartbeatCallback(const FString &jsonString);
+    void onAuthenticateCallback(const FString& jsonString);
+    void onHeartbeatCallback(const FString& jsonString);
 
     void CheckAuthCredentials(TSharedPtr<FJsonObject> authResponse);
 
-    FString _appId;
-    FString _serverName;
-    FString _serverSecret;
-    FString _url;
-    
     TSharedPtr<Request> _activeRequest;
     TSharedPtr<Request> _nullActiveRequest;
-    State _state = State::Disconnected;
     bool _autoAuth = false;
     bool _logEnabled = false;
-    int32 _packetId = 0;
-    FString _sessionId = "";
-    
-    double _heartbeatStartTime = 0;
-    double _heartbeatInverval;
+
+    US2SSessionData _sessionData;
 
     TArray<TSharedPtr<Request>> _requestQueue;
 };
