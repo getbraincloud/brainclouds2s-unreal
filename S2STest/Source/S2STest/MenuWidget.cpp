@@ -13,9 +13,9 @@ void UMenuWidget::NativeConstruct()
 	Super::NativeConstruct();
 
 	//INIT BrainCloud
-	appId = "26202";
-	FString serverName = "dedicatedserver";
-	FString serverSecret = "d31306d5-ec5d-4be9-b797-84a3a33c8012";
+	appId = "";
+	FString serverName = "";
+	FString serverSecret = "";
 	FString url = "https://api.internal.braincloudservers.com/s2sdispatcher";
 
 	_bc = NewObject<US2SRTTComms>();
