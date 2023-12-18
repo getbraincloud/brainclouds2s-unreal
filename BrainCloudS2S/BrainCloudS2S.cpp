@@ -199,17 +199,22 @@ void UBrainCloudS2S::CheckAuthCredentials(TSharedPtr<FJsonObject> authResponse)
         }
         _sessionData.heartbeatStartTime = FPlatformTime::Seconds();
         _sessionData.state = S2SState::Authenticated;
-        UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticated - set heartbeatInterval to: %d"), _sessionData.heartbeatInterval);
+
+        if (_logEnabled)
+            UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticated - set heartbeatInterval to: %d"), _sessionData.heartbeatInterval);
     }
     else
     {
-        UE_LOG(LogBrainCloudS2S, Error, TEXT("S2S Failed To Authenticate"));
+        if (_logEnabled)
+            UE_LOG(LogBrainCloudS2S, Error, TEXT("S2S Failed To Authenticate"));
     }
 }
 
 void UBrainCloudS2S::onAuthenticateCallback(const FString& jsonString)
 {
-    UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticate result: %s"), *jsonString);
+    if(_logEnabled)
+        UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticate result: %s"), *jsonString);
+
     if (_sessionData.state != S2SState::Authenticated)
     {
         // Try to deserialize the json
@@ -239,7 +244,8 @@ void UBrainCloudS2S::runCallbacks()
     }
     else
     {
-        UE_LOG(LogBrainCloudS2S, Log, TEXT("Number of Waiting Requests, %d"), _requestQueue.Num()); //Check num request in queue
+        if(_logEnabled)
+            UE_LOG(LogBrainCloudS2S, Log, TEXT("Number of Waiting Requests, %d"), _requestQueue.Num()); //Check num request in queue
 
         //auto pActiveRequest = _requestQueue[0];
         auto pActiveRequest = _activeRequest;
