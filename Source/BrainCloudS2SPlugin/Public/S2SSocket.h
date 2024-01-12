@@ -8,7 +8,7 @@
 #include "Runtime/Online/WebSockets/Public/WebSocketsModule.h"
 #include "S2SSocket.generated.h"
 
-DEFINE_LOG_CATEGORY_STATIC(S2SWebSocket, Log, All);
+
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FS2SWebSocketClosed);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FS2SWebSocketConnected);

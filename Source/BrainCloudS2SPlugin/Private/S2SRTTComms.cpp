@@ -4,6 +4,7 @@
 #include "S2SRTTComms.h"
 #include <Kismet/GameplayStatics.h>
 #include "ConvertUtilities.h"
+#include "../../../../BCClient/Source/BCClientPlugin/Private/JsonUtil.h"
 
 #define MAX_PAYLOAD_RTT (64 * 1024) // [dsl] This used to be set to 10MB, failed on mac SNDBUF too big for the TCP socket.
 #define INITIAL_HEARTBEAT_TIME 10
@@ -256,7 +257,7 @@ void US2SRTTComms::webSocket_OnMessage(const TArray<uint8>& in_data)
     FString parsedMessage = ConvertUtilities::BCBytesToString(in_data.GetData(), in_data.Num());
     UE_LOG(S2SWebSocket, Log, TEXT("RECV: %s "), *parsedMessage);
 
-    TSharedPtr<FJsonObject> jsonData = ConvertUtilities::jsonStringToValue(parsedMessage);
+    TSharedPtr<FJsonObject> jsonData = JsonUtil::jsonStringToValue(parsedMessage);
     FString service = jsonData->HasField(TEXT("service")) ? jsonData->GetStringField(TEXT("service")) : "";
     FString operation = jsonData->HasField(TEXT("operation")) ? jsonData->GetStringField(TEXT("operation")) : "";
     TSharedPtr<FJsonObject> innerData = nullptr;
@@ -378,7 +379,7 @@ FString US2SRTTComms::buildHeartbeatRequest()
     json->SetStringField("operation", "HEARTBEAT");
     json->SetObjectField("data", nullptr);
 
-    return ConvertUtilities::jsonValueToString(json);
+    return JsonUtil::jsonValueToString(json);
 }
 
 void US2SRTTComms::registerRTTCallback(const US2SCallback& callback)

@@ -3,22 +3,17 @@ Tested in Unreal 4.24
 
 ## Installation:
 
-1. Copy the `BrainCloudS2S` folder into your projects source folder.
-2. In your `*.build.cs` build file, add those 3 modules:
-   ```
-   PrivateDependencyModuleNames.AddRange(new string[]
-   {
-       "JsonUtilities",
-       "HTTP",
-       "Json",
-       "WebSockets"
-   });
-   ```
+1. In your projects `Plugins` folder, create a new folder named `BrainCloudS2SPlugin` and copy the content of this repository into that folder
+2. Open your project with Unreal Engine, then open the Plugins window and enable the BrainCloudS2SPlugin there.
+
+Alternatively, you could add this repo as a submodule in your plugins folder
 
 ## Usage
 
 ### Initialize S2S library
 ```
+#include <S2SRTTComms.h>
+
 US2SRTTComms *pS2S;
 pS2S = NewObject<US2SRTTComms>();
 pS2S->AddToRoot();
@@ -55,12 +50,6 @@ pS2S->registerRTTCallback([this, rttCallback](const FString& result)
 		{
 			rttCallback.ExecuteIfBound(result);
 		});
-```
-
-### Verbose
-Can enable more log of packet going or coming:
-```
-pS2S->setLogEnabled(true);
 ```
 
 

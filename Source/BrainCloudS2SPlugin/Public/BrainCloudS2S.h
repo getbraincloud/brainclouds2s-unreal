@@ -135,4 +135,3 @@ private:
     TArray<TSharedPtr<Request>> _requestQueue;
 };
 
-DECLARE_LOG_CATEGORY_EXTERN(LogBrainCloudS2S, Log, All);

@@ -7,7 +7,6 @@
 // add includes for headers that are used in most of your module's source files though.
 #include "Modules/ModuleManager.h"
 
-DEFINE_LOG_CATEGORY(LogBrainCloudS2S);
 
 // Error code for expired session
 static const int SERVER_SESSION_EXPIRED = 40365;

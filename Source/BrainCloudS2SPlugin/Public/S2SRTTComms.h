@@ -4,6 +4,7 @@
 
 #include "S2SSocket.h"
 #include "BrainCloudS2S.h"
+
 #include "S2SRTTComms.generated.h"
 
 #define INITIAL_HEARTBEAT_TIME 10
