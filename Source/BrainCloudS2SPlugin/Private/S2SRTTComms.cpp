@@ -4,7 +4,7 @@
 #include "S2SRTTComms.h"
 #include <Kismet/GameplayStatics.h>
 #include "ConvertUtilities.h"
-#include "../../../../BCClient/Source/BCClientPlugin/Private/JsonUtil.h"
+#include "JsonUtil.h"
 
 #define MAX_PAYLOAD_RTT (64 * 1024) // [dsl] This used to be set to 10MB, failed on mac SNDBUF too big for the TCP socket.
 #define INITIAL_HEARTBEAT_TIME 10

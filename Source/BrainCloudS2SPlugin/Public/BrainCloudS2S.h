@@ -38,7 +38,7 @@ struct US2SSessionData
 
 
 
-class UBrainCloudS2S
+class BRAINCLOUDS2SPLUGIN_API UBrainCloudS2S
 {
 public:
 	UBrainCloudS2S();

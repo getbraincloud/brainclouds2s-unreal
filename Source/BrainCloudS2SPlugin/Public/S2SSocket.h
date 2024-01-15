@@ -16,7 +16,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FS2SWebSocketReceiveData, const TArr
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FS2SWebSocketReceiveMessage, const FString&, data);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FS2SWebSocketConnectError, const FString&, error);
 
-class IS2SWebSocketBaseCallbacks
+class BRAINCLOUDS2SPLUGIN_API IS2SWebSocketBaseCallbacks
 {
 public:
 	virtual void OnConnectError(const FString& error) = 0;
@@ -26,7 +26,7 @@ public:
 };
 
 UCLASS(Blueprintable, BlueprintType)
-class US2SSocket : public UObject
+class BRAINCLOUDS2SPLUGIN_API US2SSocket : public UObject
 {
 	GENERATED_BODY()
 public:
