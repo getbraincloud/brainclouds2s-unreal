@@ -1,6 +1,8 @@
 # brainCloud S2S C++ library for Unreal
 Tested in Unreal 4.24
 
+## Note: This library requires that the brainCloud library also exists in the project it is being used in.
+
 ## Installation:
 
 1. In your projects `Plugins` folder, create a new folder named `BrainCloudS2SPlugin` and copy the content of this repository into that folder
