@@ -18,7 +18,16 @@
 		{
 			"Name": "BrainCloudS2SPlugin",
 			"Type": "Runtime",
-			"LoadingPhase": "PreDefault"
+			"LoadingPhase": "PreDefault",
+			"AdditionalDependencies": [
+				"BCClient"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "BCClient",
+			"Enabled": true
 		}
 	]
 }
