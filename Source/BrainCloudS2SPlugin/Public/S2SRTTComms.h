@@ -5,7 +5,7 @@
 #include "S2SSocket.h"
 #include "BrainCloudS2S.h"
 
-//#include "S2SRTTComms.generated.h"
+#include "S2SRTTComms.generated.h"
 
 #define INITIAL_HEARTBEAT_TIME 10
 
@@ -21,11 +21,10 @@ class US2SCommsProxy;
 class US2SSocket;
 
 
-//UCLASS(MinimalAPI)
+UCLASS(Blueprintable, BlueprintType)
 class BRAINCLOUDS2SPLUGIN_API US2SRTTComms : public UObject
 {
-	//GENERATED_BODY()
-
+	GENERATED_BODY()
 public:
 	US2SRTTComms();
 	~US2SRTTComms();
