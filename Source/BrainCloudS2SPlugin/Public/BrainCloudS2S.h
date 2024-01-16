@@ -38,7 +38,7 @@ struct US2SSessionData
 
 
 
-class UBrainCloudS2S
+class BRAINCLOUDS2SPLUGIN_API UBrainCloudS2S
 {
 public:
 	UBrainCloudS2S();
@@ -135,4 +135,3 @@ private:
     TArray<TSharedPtr<Request>> _requestQueue;
 };
 
-DECLARE_LOG_CATEGORY_EXTERN(LogBrainCloudS2S, Log, All);
