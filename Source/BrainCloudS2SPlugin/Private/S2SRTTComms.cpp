@@ -30,6 +30,8 @@ void US2SRTTComms::InitializeS2S(const FString& appId, const FString& serverName
         serverSecret,
         url, true));
 
+    this->m_appId = appId;
+
     m_s2sClient->Init(appId, serverName, serverSecret, url, true);
 
     // Verbose log
@@ -354,7 +356,7 @@ FString US2SRTTComms::buildConnectionRequest()
     sysJson->SetStringField("protocol", "ws");
 
     TSharedRef<FJsonObject> jsonData = MakeShareable(new FJsonObject());
-    jsonData->SetStringField("appId", getenv("APP_ID"));
+    jsonData->SetStringField("appId", m_appId);
     jsonData->SetStringField("sessionId", m_s2sClient->getSessionID());
     jsonData->SetStringField("profileId", "s");
     jsonData->SetObjectField("system", sysJson);
