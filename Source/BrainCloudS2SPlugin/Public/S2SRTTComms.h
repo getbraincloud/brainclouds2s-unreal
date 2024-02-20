@@ -143,6 +143,7 @@ private:
 
 	FString m_cxId;
 	FString m_eventServer;
+	FString m_appId;
 
 	TSharedPtr<UBrainCloudS2S> m_s2sClient;
 	TSharedPtr<FJsonObject> m_rttHeaders;
