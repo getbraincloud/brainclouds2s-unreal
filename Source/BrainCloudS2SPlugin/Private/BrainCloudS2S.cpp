@@ -233,7 +233,6 @@ void UBrainCloudS2S::onAuthenticateCallback(const FString& jsonString)
 
 void UBrainCloudS2S::runCallbacks()
 {
-    //UE_LOG(LogTemp, Log, TEXT("Running callbacks"));
     if (_activeRequest == nullptr)
     {
         if (_requestQueue.Num())
