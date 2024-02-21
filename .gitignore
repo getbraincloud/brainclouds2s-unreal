@@ -1,5 +1,6 @@
 # vscode
 .vscode/*
+BCSubsystem.code-workspace
 
 # Compiled Object files
 *.slo
@@ -58,9 +59,6 @@ Intermediate/
 # Cache files for the editor to use
 DerivedDataCache/*
 
-# Too large for git
-Content/StarterContent
-
 # Mac Artifacts
 .DS_Store
 
@@ -74,3 +72,5 @@ Content/StarterContent
 
 # VS
 .vs/
+
+/.idea/*
