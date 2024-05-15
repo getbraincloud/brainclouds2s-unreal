@@ -200,7 +200,7 @@ void UBrainCloudS2S::CheckAuthCredentials(TSharedPtr<FJsonObject> authResponse)
         _sessionData.state = S2SState::Authenticated;
 
         if (_logEnabled)
-            UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticated - set heartbeatInterval to: %.0f"), _sessionData.heartbeatInterval);
+            UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticated - set heartbeatInterval to: %.0lf"), _sessionData.heartbeatInterval);
     }
     else
     {
