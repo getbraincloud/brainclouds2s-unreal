@@ -94,38 +94,38 @@ void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& 
                 UE_LOG(LogBrainCloudS2S, Log, TEXT("Got response for connection request: %s"), *result);
         
 
-        TSharedRef<TJsonReader<TCHAR>> reader = TJsonReaderFactory<TCHAR>::Create(result);
-        TSharedPtr<FJsonObject> jsonPacket = MakeShareable(new FJsonObject());
+                TSharedRef<TJsonReader<TCHAR>> reader = TJsonReaderFactory<TCHAR>::Create(result);
+                TSharedPtr<FJsonObject> jsonPacket = MakeShareable(new FJsonObject());
 
-        bool res = FJsonSerializer::Deserialize(reader, jsonPacket);
-        int status = jsonPacket->GetIntegerField(TEXT("status"));
-        if (res)
-        {
-            TSharedPtr<FJsonObject> jsonData = jsonPacket->GetObjectField(TEXT("data"));
-            TArray<TSharedPtr<FJsonValue>> endpoints = jsonData->GetArrayField(TEXT("endpoints"));
-            m_rttHeaders = jsonData->GetObjectField(TEXT("auth"));
+                bool res = FJsonSerializer::Deserialize(reader, jsonPacket);
+                int status = jsonPacket->GetIntegerField(TEXT("status"));
+                if (res)
+                {
+                    TSharedPtr<FJsonObject> jsonData = jsonPacket->GetObjectField(TEXT("data"));
+                    TArray<TSharedPtr<FJsonValue>> endpoints = jsonData->GetArrayField(TEXT("endpoints"));
+                    m_rttHeaders = jsonData->GetObjectField(TEXT("auth"));
 
-            //setup socket connection
-            TSharedPtr<FJsonObject> endpoint = endpoints[0]->AsObject();
-            bool sslEnabled = endpoint->GetBoolField(TEXT("ssl"));
+                    //setup socket connection
+                    TSharedPtr<FJsonObject> endpoint = endpoints[0]->AsObject();
+                    bool sslEnabled = endpoint->GetBoolField(TEXT("ssl"));
 
-            FString url = (sslEnabled ? TEXT("wss://") : TEXT("ws://"));
-            url += endpoint->GetStringField(TEXT("host"));
-            url += ":";
-            url += FString::Printf(TEXT("%d"), endpoint->GetIntegerField(TEXT("port")));
-            url += getUrlQueryParameters();
+                    FString url = (sslEnabled ? TEXT("wss://") : TEXT("ws://"));
+                    url += endpoint->GetStringField(TEXT("host"));
+                    url += ":";
+                    url += FString::Printf(TEXT("%d"), endpoint->GetIntegerField(TEXT("port")));
+                    url += getUrlQueryParameters();
 
-            UE_LOG(S2SWebSocket, Log, TEXT("Setting up web socket with url %s "), *url);
+                    UE_LOG(S2SWebSocket, Log, TEXT("Setting up web socket with url %s "), *url);
 
-            setupWebSocket(url);
-            rttEnabledSuccessCallback = OnSuccess;
-            rttEnabledFailureCallback = OnFailure;
+                    setupWebSocket(url);
+                    rttEnabledSuccessCallback = OnSuccess;
+                    rttEnabledFailureCallback = OnFailure;
             
-        }
-        else if(status != 200){
-            OnFailure(result);
-        }
-        });
+                }
+                else if(status != 200){
+                    OnFailure(result);
+                }
+            });
     }
 }
 
