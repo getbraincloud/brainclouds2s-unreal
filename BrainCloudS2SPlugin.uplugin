@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 5,
-	"VersionName": "5.4.0",
+	"VersionName": "5.5.0",
 	"FriendlyName": "BrainCloudS2SPlugin",
 	"Description": "brainCloud S2S Plugin for Unreal Engine",
 	"Category": "Network",
