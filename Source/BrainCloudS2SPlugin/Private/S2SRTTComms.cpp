@@ -256,7 +256,7 @@ void US2SRTTComms::disconnect()
 
 void US2SRTTComms::webSocket_OnMessage(const TArray<uint8>& in_data)
 {
-    FString parsedMessage = ConvertUtilities::BCBytesToString(in_data.GetData(), in_data.Num());
+    FString parsedMessage = ConvertUtilities::BCBytesToString(in_data);
     UE_LOG(S2SWebSocket, Log, TEXT("RECV: %s "), *parsedMessage);
 
     TSharedPtr<FJsonObject> jsonData = JsonUtil::jsonStringToValue(parsedMessage);
