@@ -1,3 +1,4 @@
+// Copyright 2026 bitHeads, Inc. All Rights Reserved.
 #include "BrainCloudS2S.h"
 #include "Logging/LogMacros.h"
 #include "Http.h"
