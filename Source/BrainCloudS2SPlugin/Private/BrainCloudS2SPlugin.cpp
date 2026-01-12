@@ -1,3 +1,4 @@
+// Copyright 2026 bitHeads, Inc. All Rights Reserved.
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "BrainCloudS2SPlugin.h"
