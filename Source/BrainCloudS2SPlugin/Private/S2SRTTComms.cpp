@@ -22,62 +22,51 @@ US2SRTTComms::~US2SRTTComms()
 {
 }
 
-void US2SRTTComms::InitializeS2S(const FString& appId, const FString& serverName, const FString& serverSecret, const FString& url, bool autoAuth, bool logEnabled)
+void US2SRTTComms::SetS2SContext(UBrainCloudS2S* context)
 {
-    // Create S2S context
-    m_s2sClient = MakeShareable(new UBrainCloudS2S(appId,
-        serverName,
-        serverSecret,
-        url, true));
-
-    this->m_appId = appId;
-
-    m_s2sClient->Init(appId, serverName, serverSecret, url, true);
-
-    // Verbose log
-    m_s2sClient->setLogEnabled(logEnabled);
+    m_s2sClient = context;
 }
 
 void US2SRTTComms::runCallbacks()
 {
-    if (m_s2sClient.IsValid()) {
-        m_s2sClient->runCallbacks();
+    // NOTE: S2S HTTP callbacks are driven by UBrainCloudS2S::runCallbacks(),
+    // which calls us. We only handle RTT heartbeat / disconnect logic here.
+    if (m_s2sClient == nullptr) return;
 
-        if (!isRTTEnabled) return;
+    if (!isRTTEnabled) return;
 
-        if (s2sSocket != nullptr) {
-            float nowMS = FPlatformTime::Seconds();
+    if (s2sSocket != nullptr) {
+        float nowMS = FPlatformTime::Seconds();
 
-            m_timeSinceLastRequest += (nowMS - m_lastNowMS);
-            m_lastNowMS = nowMS;
+        m_timeSinceLastRequest += (nowMS - m_lastNowMS);
+        m_lastNowMS = nowMS;
 
-            if (m_heartBeatSent && m_timeSinceLastRequest >= m_heartBeatIdleSecs)
-            {
-                if (!m_heartBeatRecv) {
-                    UE_LOG(LogBrainCloudS2S, Log, TEXT("RTT: lost heartbeat %f idle"), m_heartBeatIdleSecs);
-                    disconnect();
-                }
-                m_heartBeatSent = false;
-            }
-            if (m_timeSinceLastRequest >= m_heartBeatSecs)
-            {
-                m_timeSinceLastRequest = 0;
-                m_heartBeatSent = true;
-                m_heartBeatRecv = false;
-                send(buildHeartbeatRequest(), false);
-            }
-        }
-
-        if (m_disconnectedWithReason)
+        if (m_heartBeatSent && m_timeSinceLastRequest >= m_heartBeatIdleSecs)
         {
-            disconnect();
+            if (!m_heartBeatRecv) {
+                UE_LOG(LogBrainCloudS2S, Log, TEXT("RTT: lost heartbeat %f idle"), m_heartBeatIdleSecs);
+                disconnect();
+            }
+            m_heartBeatSent = false;
         }
+        if (m_timeSinceLastRequest >= m_heartBeatSecs)
+        {
+            m_timeSinceLastRequest = 0;
+            m_heartBeatSent = true;
+            m_heartBeatRecv = false;
+            send(buildHeartbeatRequest(), false);
+        }
+    }
+
+    if (m_disconnectedWithReason)
+    {
+        disconnect();
     }
 }
 
 void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& OnFailure)
 {
-    if (m_s2sClient.IsValid()) {
+    if (m_s2sClient != nullptr) {
 
         TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject);
 
@@ -92,7 +81,7 @@ void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& 
             [this, OnSuccess, OnFailure](const FString& result)
             {
                 UE_LOG(LogBrainCloudS2S, Log, TEXT("Got response for connection request: %s"), *result);
-        
+
 
                 TSharedRef<TJsonReader<TCHAR>> reader = TJsonReaderFactory<TCHAR>::Create(result);
                 TSharedPtr<FJsonObject> jsonPacket = MakeShareable(new FJsonObject());
@@ -120,7 +109,7 @@ void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& 
                     setupWebSocket(url);
                     rttEnabledSuccessCallback = OnSuccess;
                     rttEnabledFailureCallback = OnFailure;
-            
+
                 }
                 else if(status != 200){
                     OnFailure(result);
@@ -131,31 +120,10 @@ void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& 
 
 void US2SRTTComms::disableRTT()
 {
-    if (s2sSocket->IsConnected()) {
+    if (s2sSocket != nullptr && s2sSocket->IsConnected()) {
         disconnect();
     }
     deregisterRTTCallback();
-}
-
-void US2SRTTComms::request(const FString& requestJson, const US2SCallback& Callback)
-{
-    if (m_s2sClient.IsValid()) {
-        m_s2sClient->request(requestJson, Callback);
-    }
-}
-
-void US2SRTTComms::authenticate(const US2SCallback& callback)
-{
-    if (m_s2sClient.IsValid()) {
-        m_s2sClient->authenticate(callback);
-    }
-}
-
-void US2SRTTComms::authenticate()
-{
-    if (m_s2sClient.IsValid()) {
-        m_s2sClient->authenticate();
-    }
 }
 
 FString US2SRTTComms::getUrlQueryParameters()
@@ -226,7 +194,7 @@ void US2SRTTComms::joinSystemChatChannel(const US2SCallback& callback)
 
 void US2SRTTComms::disconnect()
 {
-    if (!m_s2sClient.IsValid()) return;
+    if (m_s2sClient == nullptr) return;
     if (s2sSocket == nullptr) return;
     if (!s2sSocket->IsConnected()) return;
 
@@ -252,11 +220,12 @@ void US2SRTTComms::disconnect()
     m_heartBeatSent = false;
     m_heartBeatRecv = true;
     m_timeSinceLastRequest = 0;
+    isRTTEnabled = false;
 }
 
 void US2SRTTComms::webSocket_OnMessage(const TArray<uint8>& in_data)
 {
-    FString parsedMessage = ConvertUtilities::BCBytesToString(in_data);
+    FString parsedMessage = ConvertUtilities::BCBytesToString(in_data.GetData(), in_data.Num());
     UE_LOG(S2SWebSocket, Log, TEXT("RECV: %s "), *parsedMessage);
 
     TSharedPtr<FJsonObject> jsonData = JsonUtil::jsonStringToValue(parsedMessage);
@@ -316,7 +285,7 @@ void US2SRTTComms::webSocket_OnMessage(const TArray<uint8>& in_data)
 
 void US2SRTTComms::webSocket_OnError(const FString& in_error)
 {
-    if (m_s2sClient.IsValid())
+    if (m_s2sClient != nullptr)
         UE_LOG(S2SWebSocket, Log, TEXT("Error: %s"), *in_error);
 
     rttEnabledFailureCallback(in_error);
@@ -324,7 +293,7 @@ void US2SRTTComms::webSocket_OnError(const FString& in_error)
 
 void US2SRTTComms::webSocket_OnClose()
 {
-    if (m_s2sClient.IsValid())
+    if (m_s2sClient != nullptr)
     {
         UE_LOG(S2SWebSocket, Log, TEXT("Connection closed"));
 
@@ -351,12 +320,15 @@ FString US2SRTTComms::buildConnectionRequest()
 {
     FString platform = UGameplayStatics::GetPlatformName();
 
+    // Get appId from the owning S2S context
+    FString appId = m_s2sClient ? m_s2sClient->getSessionData().appId : TEXT("");
+
     TSharedRef<FJsonObject> sysJson = MakeShareable(new FJsonObject());
     sysJson->SetStringField("platform", platform);
     sysJson->SetStringField("protocol", "ws");
 
     TSharedRef<FJsonObject> jsonData = MakeShareable(new FJsonObject());
-    jsonData->SetStringField("appId", m_appId);
+    jsonData->SetStringField("appId", appId);
     jsonData->SetStringField("sessionId", m_s2sClient->getSessionID());
     jsonData->SetStringField("profileId", "s");
     jsonData->SetObjectField("system", sysJson);
@@ -404,4 +376,59 @@ void US2SRTTComms::processRTTCallback(const FString& in_message)
 {
     if (registeredBPCallback != nullptr)
         registeredBPCallback(in_message);
+}
+
+// --------------------------------------------------------------------------
+// Blueprint wrapper helper
+// --------------------------------------------------------------------------
+
+US2SCallback US2SRTTComms::WrapBPDelegate(const FS2SResponseDelegate& Delegate)
+{
+    FS2SResponseDelegate DelegateCopy = Delegate;
+    return [DelegateCopy](const FString& JsonResponse)
+    {
+        // For RTT messages, determine success from the status field if present
+        bool bSuccess = true;
+        TSharedRef<TJsonReader<TCHAR>> Reader = TJsonReaderFactory<TCHAR>::Create(JsonResponse);
+        TSharedPtr<FJsonObject> JsonObj;
+        if (FJsonSerializer::Deserialize(Reader, JsonObj) && JsonObj->HasField(TEXT("status")))
+        {
+            bSuccess = (JsonObj->GetIntegerField(TEXT("status")) == 200);
+        }
+        DelegateCopy.ExecuteIfBound(bSuccess, JsonResponse);
+    };
+}
+
+// --------------------------------------------------------------------------
+// Blueprint wrappers
+// --------------------------------------------------------------------------
+
+void US2SRTTComms::S2S_EnableRTT(const FS2SResponseDelegate& OnSuccess, const FS2SResponseDelegate& OnFailure)
+{
+    enableRTT(WrapBPDelegate(OnSuccess), WrapBPDelegate(OnFailure));
+}
+
+void US2SRTTComms::S2S_DisableRTT()
+{
+    disableRTT();
+}
+
+void US2SRTTComms::S2S_RegisterRTTCallback(const FS2SResponseDelegate& Callback)
+{
+    registerRTTCallback(WrapBPDelegate(Callback));
+}
+
+void US2SRTTComms::S2S_DeregisterRTTCallback()
+{
+    deregisterRTTCallback();
+}
+
+void US2SRTTComms::S2S_Send(const FString& Message, bool bAllowLogging)
+{
+    send(Message, bAllowLogging);
+}
+
+void US2SRTTComms::S2S_Disconnect()
+{
+    disconnect();
 }

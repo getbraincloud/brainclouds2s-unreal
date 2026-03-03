@@ -4,6 +4,7 @@
 
 #include "S2SSocket.h"
 #include "BrainCloudS2S.h"
+#include "BrainCloudS2STypes.h"
 
 #include "S2SRTTComms.generated.h"
 
@@ -29,22 +30,12 @@ public:
 	US2SRTTComms();
 	~US2SRTTComms();
 
-	/*
-	 * InitializeS2S - used to initialize s2s app settings if needed.
-	 * @param appId Application ID
-	 * @param serverName Server name
-	 * @param serverSecret Server secret key
-	 * @param url The server url to send the request to.
-	 */
-	void InitializeS2S(const FString& appId,
-		const FString& serverName,
-		const FString& serverSecret,
-		const FString& url,
-		bool autoAuth,
-		bool logEnabled);
+	/** Called internally by UBrainCloudS2S to wire this service to its owning context. */
+	void SetS2SContext(UBrainCloudS2S* context);
 
 	/*
-	 * Update and perform callbacks on the calling thread.
+	 * Update RTT heartbeats and check for disconnection.
+	 * Called by UBrainCloudS2S::runCallbacks().
 	 */
 	void runCallbacks();
 
@@ -64,24 +55,6 @@ public:
 	 * Disables RTT
 	 */
 	void disableRTT();
-
-	/*
-	 * request - makes an S2S request 
-	 * @param requestJson the json data string sent in the request
-	 * @param Callback Callback for when we get a response
-	 */
-	void request(const FString& requestJson, const US2SCallback& Callback);
-
-	/*
-	 * authenticate - authenticates and starts the S2S session
-	 * @param callback Callback for the authentication response
-	 */
-	void authenticate(const US2SCallback& callback);
-
-	/*
-	 * authenticate - authenticates and starts the S2S session
-	 */
-	void authenticate();
 
 	/*
 	 * registerRTTCallback - registers an RTT callback that is triggered when we receive an RTT message
@@ -128,24 +101,49 @@ public:
 	UFUNCTION()
 	void webSocket_OnError(const FString& in_error);
 
+	// -----------------------------------------------------------------------
+	// Blueprint wrappers (S2S_ prefix)
+	// -----------------------------------------------------------------------
+
+	UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S|RTT", meta = (DisplayName = "Enable RTT"))
+	void S2S_EnableRTT(const FS2SResponseDelegate& OnSuccess, const FS2SResponseDelegate& OnFailure);
+
+	UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S|RTT", meta = (DisplayName = "Disable RTT"))
+	void S2S_DisableRTT();
+
+	UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S|RTT", meta = (DisplayName = "Register RTT Callback"))
+	void S2S_RegisterRTTCallback(const FS2SResponseDelegate& Callback);
+
+	UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S|RTT", meta = (DisplayName = "Deregister RTT Callback"))
+	void S2S_DeregisterRTTCallback();
+
+	UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S|RTT", meta = (DisplayName = "Send RTT Message"))
+	void S2S_Send(const FString& Message, bool bAllowLogging = true);
+
+	UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S|RTT", meta = (DisplayName = "Disconnect RTT"))
+	void S2S_Disconnect();
+
 private:
 
 	FString getUrlQueryParameters();
 	void setupWebSocket(const FString& in_url);
 	void setRTTHeartBeatSeconds(int32 in_value);
-	
+
 	FString buildConnectionRequest();
 	FString buildHeartbeatRequest();
 
 	void processRTTCallback(const FString &in_message);
 
-	US2SSocket *s2sSocket;
+	/** Helper: wraps an FS2SResponseDelegate into a US2SCallback (success is always true for RTT messages). */
+	static US2SCallback WrapBPDelegate(const FS2SResponseDelegate& Delegate);
+
+	US2SSocket *s2sSocket = nullptr;
 
 	FString m_cxId;
 	FString m_eventServer;
-	FString m_appId;
 
-	TSharedPtr<UBrainCloudS2S> m_s2sClient;
+	UPROPERTY()
+	UBrainCloudS2S* m_s2sClient = nullptr;
 	TSharedPtr<FJsonObject> m_rttHeaders;
 	TSharedRef<FJsonObject> m_disconnectJson = MakeShareable(new FJsonObject());
 
@@ -165,7 +163,3 @@ private:
 	US2SCallback rttEnabledSuccessCallback;
 	US2SCallback rttEnabledFailureCallback;
 };
-
-
-
-
