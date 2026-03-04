@@ -83,7 +83,7 @@ void US2SGlobalFileV3::sysCheckFullpathFilenameExists(const FString& fullpathFil
     const US2SCallback& callback)
 {
     TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
-    Data->SetStringField(TEXT("fullpathFilename"), fullpathFilename);
+    Data->SetStringField(TEXT("fullPathFilename"), fullpathFilename);
     _s2s->request(BuildGFV3Request(TEXT("SYS_CHECK_FULLPATH_FILENAME_EXISTS"), Data), callback);
 }
 
@@ -246,7 +246,7 @@ void US2SGlobalFileV3::uploadGlobalFile(const FString& treeId, const FString& fi
     Data->SetBoolField(TEXT("overwriteIfPresent"), overwriteIfPresent);
     Data->SetNumberField(TEXT("fileSize"), static_cast<double>(fileData.size()));
 
-    int32 gen = ++_generation;
+    int32 gen = _generation.load();
 
     _s2s->request(BuildGFV3Request(TEXT("SYS_PREPARE_UPLOAD"), Data),
         [this, gen, filename, fileData, callback](const FString& result)
@@ -264,8 +264,33 @@ void US2SGlobalFileV3::uploadGlobalFile(const FString& treeId, const FString& fi
                     TSharedPtr<FJsonObject> Details = JsonData->GetObjectField(TEXT("fileDetails"));
                     FString UploadId = Details->GetStringField(TEXT("uploadId"));
 
-                    FString FullUploadUrl = _uploadUrl + TEXT("?uploadId=") + UploadId
-                        + TEXT("&sessionId=") + _s2s->getSessionID();
+                    FString FullUploadUrl = _uploadUrl
+                        + TEXT("?gameId=") + _s2s->getSessionData().appId
+                        + TEXT("&uploadId=") + UploadId;
+
+                    // Use server-supplied uploadUrl if present (mirrors C++ reference behaviour)
+                    if (Details->HasField(TEXT("uploadUrl")))
+                    {
+                        FString ServerUrl = Details->GetStringField(TEXT("uploadUrl"));
+                        if (!ServerUrl.IsEmpty())
+                        {
+                            if (ServerUrl.StartsWith(TEXT("http")))
+                            {
+                                FullUploadUrl = ServerUrl;
+                            }
+                            else
+                            {
+                                // Relative path — prefix with scheme+host from _uploadUrl
+                                int32 SchemeEnd = _uploadUrl.Find(TEXT("://"));
+                                if (SchemeEnd != INDEX_NONE)
+                                {
+                                    int32 HostEnd = _uploadUrl.Find(TEXT("/"), ESearchCase::IgnoreCase, ESearchDir::FromStart, SchemeEnd + 3);
+                                    if (HostEnd != INDEX_NONE)
+                                        FullUploadUrl = _uploadUrl.Left(HostEnd) + ServerUrl;
+                                }
+                            }
+                        }
+                    }
 
                     sendFileUpload(FullUploadUrl, filename, fileData, callback);
                     return;
@@ -292,7 +317,7 @@ void US2SGlobalFileV3::sendFileUpload(const FString& uploadUrl, const FString& f
     // Build multipart body
     TArray<uint8> Payload;
     {
-        FString Header = FString::Printf(TEXT("--%s\r\nContent-Disposition: form-data; name=\"uploadFile\"; filename=\"%s\"\r\nContent-Type: application/octet-stream\r\n\r\n"), *Boundary, *filename);
+        FString Header = FString::Printf(TEXT("--%s\r\nContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\nContent-Type: application/octet-stream\r\n\r\n"), *Boundary, *filename);
         FTCHARToUTF8 HeaderUtf8(*Header);
         Payload.Append(reinterpret_cast<const uint8*>(HeaderUtf8.Get()), HeaderUtf8.Length());
         Payload.Append(fileData.data(), fileData.size());
@@ -314,7 +339,7 @@ void US2SGlobalFileV3::sendFileUpload(const FString& uploadUrl, const FString& f
             }
             else
             {
-                Result = TEXT("{\"status_code\":900,\"message\":\"Upload HTTP request failed\"}");
+                Result = TEXT("{\"status\":900,\"status_message\":\"Upload HTTP request failed\"}");
             }
 
             std::lock_guard<std::mutex> Lock(_uploadMutex);

@@ -187,7 +187,8 @@ void UBrainCloudS2S::queueRequest(const TSharedPtr<Request>& pRequest)
 void UBrainCloudS2S::request(const FString& jsonString, const US2SCallback& callback)
 {
     // If autoAuth is on
-    UE_LOG(LogBrainCloudS2S, Log, TEXT("[S2SRequest] autoAuth: %s \n"), _autoAuth ? TEXT("true") : TEXT("false"));
+    if (_logEnabled)
+        UE_LOG(LogBrainCloudS2S, Log, TEXT("[S2SRequest] autoAuth: %s"), _autoAuth ? TEXT("true") : TEXT("false"));
     if (_autoAuth)
     {
         if (_sessionData.state != S2SState::Authenticated && !_requestQueue.Num())
@@ -286,9 +287,6 @@ void UBrainCloudS2S::runCallbacks()
     }
     else
     {
-        if(_logEnabled)
-            UE_LOG(LogBrainCloudS2S, Log, TEXT("Number of Waiting Requests, %d"), _requestQueue.Num()); //Check num request in queue
-
         //auto pActiveRequest = _requestQueue[0];
         auto pActiveRequest = _activeRequest;
         EHttpRequestStatus::Type status = pActiveRequest->pHTTPRequest->GetStatus();
