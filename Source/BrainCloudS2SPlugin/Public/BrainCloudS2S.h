@@ -101,6 +101,13 @@ public:
     void setLogEnabled(bool enabled);
 
     /*
+     * Set whether sensitive fields (e.g. serverSecret) are obfuscated in logs.
+     * Obfuscation is enabled by default. Disable only for local debugging.
+     * @param enabled Will obfuscate if true. Default true
+     */
+    void setLogObfuscationEnabled(bool enabled);
+
+    /*
      * Send an S2S request.
      * @param json Content to be sent
      * @param callback Callback function
@@ -158,6 +165,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Set Log Enabled"))
     void S2S_SetLogEnabled(bool bEnabled);
 
+    /** Enables or disables obfuscation of sensitive fields (e.g. serverSecret) in logs. On by default. */
+    UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Set Log Obfuscation Enabled"))
+    void S2S_SetLogObfuscationEnabled(bool bEnabled);
+
     UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Request"))
     void S2S_Request(const FString& JsonString, const FS2SResponseDelegate& Callback);
 
@@ -192,10 +203,14 @@ private:
     /** Creates and initializes owned service sub-objects. Called after Init(). */
     void InitServices();
 
+    /** Replaces the value of sensitive JSON fields (e.g. serverSecret) with "***". */
+    static FString RedactSensitiveJson(const FString& Json);
+
     TSharedPtr<Request> _activeRequest;
     TSharedPtr<Request> _nullActiveRequest;
     bool _autoAuth = false;
     bool _logEnabled = false;
+    bool _logObfuscationEnabled = true;
 
     US2SSessionData _sessionData;
 

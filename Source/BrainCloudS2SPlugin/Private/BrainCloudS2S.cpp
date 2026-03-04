@@ -148,6 +148,32 @@ void UBrainCloudS2S::setLogEnabled(bool enabled)
     _logEnabled = enabled;
 }
 
+void UBrainCloudS2S::setLogObfuscationEnabled(bool enabled)
+{
+    _logObfuscationEnabled = enabled;
+}
+
+FString UBrainCloudS2S::RedactSensitiveJson(const FString& Json)
+{
+    // Fields whose values should be replaced with *** in log output
+    static const TArray<FString> SensitiveKeys = { TEXT("serverSecret") };
+
+    FString Result = Json;
+    for (const FString& Key : SensitiveKeys)
+    {
+        const FString SearchFor = TEXT("\"") + Key + TEXT("\":\"");
+        int32 KeyStart = Result.Find(SearchFor, ESearchCase::CaseSensitive);
+        if (KeyStart == INDEX_NONE) continue;
+
+        const int32 ValueStart = KeyStart + SearchFor.Len();
+        const int32 ValueEnd = Result.Find(TEXT("\""), ESearchCase::CaseSensitive, ESearchDir::FromStart, ValueStart);
+        if (ValueEnd == INDEX_NONE) continue;
+
+        Result = Result.Left(ValueStart) + TEXT("***") + Result.Mid(ValueEnd);
+    }
+    return Result;
+}
+
 void UBrainCloudS2S::sendHeartbeat()
 {
     FString jsonHeartbeatString = "{\"service\":\"heartbeat\",\"operation\":\"HEARTBEAT\"}";
@@ -171,7 +197,8 @@ void UBrainCloudS2S::queueRequest(const TSharedPtr<Request>& pRequest)
 
     if (_logEnabled)
     {
-        UE_LOG(LogBrainCloudS2S, Log, TEXT("Sending request:%s\n"), *dataString);
+        const FString LogString = _logObfuscationEnabled ? RedactSensitiveJson(dataString) : dataString;
+        UE_LOG(LogBrainCloudS2S, Log, TEXT("Sending request:%s\n"), *LogString);
     }
 
     pRequest->pHTTPRequest = FHttpModule::Get().CreateRequest();
@@ -481,6 +508,11 @@ US2SCallback UBrainCloudS2S::WrapBPDelegate(const FS2SResponseDelegate& Delegate
 void UBrainCloudS2S::S2S_SetLogEnabled(bool bEnabled)
 {
     setLogEnabled(bEnabled);
+}
+
+void UBrainCloudS2S::S2S_SetLogObfuscationEnabled(bool bEnabled)
+{
+    setLogObfuscationEnabled(bEnabled);
 }
 
 void UBrainCloudS2S::S2S_Request(const FString& JsonString, const FS2SResponseDelegate& Callback)
