@@ -493,11 +493,6 @@ void UBrainCloudS2S::S2S_Authenticate(const FS2SResponseDelegate& Callback)
     authenticate(WrapBPDelegate(Callback));
 }
 
-void UBrainCloudS2S::S2S_AuthenticateAuto()
-{
-    authenticate();
-}
-
 void UBrainCloudS2S::S2S_Disconnect()
 {
     disconnect();

@@ -164,9 +164,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Authenticate"))
     void S2S_Authenticate(const FS2SResponseDelegate& Callback);
 
-    UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Authenticate Auto"))
-    void S2S_AuthenticateAuto();
-
     UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Disconnect"))
     void S2S_Disconnect();
 
