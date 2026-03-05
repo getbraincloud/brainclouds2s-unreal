@@ -2,6 +2,10 @@
 #include "BrainCloudS2S.h"
 #include "S2SGlobalFileV3.h"
 #include "S2SRTTComms.h"
+#include "S2SServiceName.h"
+#include "S2SServiceOperation.h"
+#include "S2SOperationParam.h"
+#include "S2SRequestBuilder.h"
 #include "Logging/LogMacros.h"
 #include "Http.h"
 #include "Json.h"
@@ -101,7 +105,14 @@ void UBrainCloudS2S::authenticate(const US2SCallback& callback)
     if (_sessionData.state != S2SState::Authenticated)
     {
         _sessionData.state = S2SState::Authenticating;
-        FString jsonAuthString = "{\"service\":\"authenticationV2\",\"operation\":\"AUTHENTICATE\",\"data\":{\"appId\":\"" + _sessionData.appId + "\",\"serverName\":\"" + _sessionData.serverName + "\",\"serverSecret\":\"" + _sessionData.serverSecret + "\"}}";
+
+        TSharedRef<FJsonObject> AuthData = MakeShared<FJsonObject>();
+        AuthData->SetStringField(S2SOperationParam::AppId,        _sessionData.appId);
+        AuthData->SetStringField(S2SOperationParam::ServerName,   _sessionData.serverName);
+        AuthData->SetStringField(S2SOperationParam::ServerSecret, _sessionData.serverSecret);
+        const FString jsonAuthString = S2SRequestBuilder::Build(
+            S2SServiceName::AuthenticationV2, S2SServiceOperation::Authenticate, AuthData);
+
         TSharedPtr<Request> pAuthRequest(new Request{
             jsonAuthString,
             callback,
@@ -176,7 +187,8 @@ FString UBrainCloudS2S::RedactSensitiveJson(const FString& Json)
 
 void UBrainCloudS2S::sendHeartbeat()
 {
-    FString jsonHeartbeatString = "{\"service\":\"heartbeat\",\"operation\":\"HEARTBEAT\"}";
+    const FString jsonHeartbeatString = S2SRequestBuilder::Build(
+        S2SServiceName::Heartbeat, S2SServiceOperation::Heartbeat);
     TSharedPtr<Request> pAuthRequest(new Request{
         jsonHeartbeatString,
         std::bind(&UBrainCloudS2S::onHeartbeatCallback, this, std::placeholders::_1),
@@ -256,17 +268,16 @@ void UBrainCloudS2S::onHeartbeatCallback(const FString& jsonString)
 
 void UBrainCloudS2S::CheckAuthCredentials(TSharedPtr<FJsonObject> authResponse)
 {
-    if (authResponse && authResponse->HasField("data"))
+    if (authResponse && authResponse->HasField(TEXT("data")))
     {
-        const auto& pData = authResponse->GetObjectField("data");
-        if (pData->HasField("heartbeatSeconds"))
+        const auto& pData = authResponse->GetObjectField(TEXT("data"));
+        if (pData->HasField(S2SOperationParam::HeartbeatSeconds))
         {
-            _sessionData.heartbeatInterval = pData->GetNumberField("heartbeatSeconds");
-            //_heartbeatInverval = 300;
+            _sessionData.heartbeatInterval = pData->GetNumberField(S2SOperationParam::HeartbeatSeconds);
         }
-        if (pData->HasField("sessionId"))
+        if (pData->HasField(S2SOperationParam::SessionId))
         {
-            _sessionData.sessionId = pData->GetStringField("sessionId");
+            _sessionData.sessionId = pData->GetStringField(S2SOperationParam::SessionId);
         }
         _sessionData.heartbeatStartTime = FPlatformTime::Seconds();
         _sessionData.state = S2SState::Authenticated;
@@ -333,9 +344,9 @@ void UBrainCloudS2S::runCallbacks()
                 TSharedPtr<FJsonObject> jsonMessage;
                 if (FJsonSerializer::Deserialize(reader, jsonPacket))
                 {
-                    if (jsonPacket->HasField("messageResponses"))
+                    if (jsonPacket->HasField(S2SOperationParam::MessageResponses))
                     {
-                        const auto& messages = jsonPacket->GetArrayField("messageResponses");
+                        const auto& messages = jsonPacket->GetArrayField(S2SOperationParam::MessageResponses);
                         if (messages.Num())
                         {
                             jsonMessage = messages[0]->AsObject();
@@ -382,7 +393,7 @@ void UBrainCloudS2S::runCallbacks()
                     // If it's a session expired, we disconnect
                     if (jsonMessage && jsonMessage->HasField("reason_code"))
                     {
-                        if (jsonMessage->GetIntegerField("reason_code") == SERVER_SESSION_EXPIRED)
+                        if (jsonMessage->GetIntegerField(S2SOperationParam::ReasonCode) == SERVER_SESSION_EXPIRED)
                         {
                             // Disconect then redo the request. It will try to re-authenticate
                             UE_LOG(LogBrainCloudS2S, Warning, TEXT("S2S session expired"));

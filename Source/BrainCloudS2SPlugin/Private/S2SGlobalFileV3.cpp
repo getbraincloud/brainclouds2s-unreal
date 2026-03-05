@@ -1,29 +1,14 @@
 // Copyright 2026 bitHeads, Inc. All Rights Reserved.
 
-
 #include "S2SGlobalFileV3.h"
 #include "BrainCloudS2S.h"
+#include "S2SServiceName.h"
+#include "S2SServiceOperation.h"
+#include "S2SOperationParam.h"
+#include "S2SRequestBuilder.h"
 #include "Http.h"
 #include "Json.h"
 
-// --------------------------------------------------------------------------
-// Internal helpers
-// --------------------------------------------------------------------------
-
-static FString BuildGFV3Request(const FString& Operation, const TSharedRef<FJsonObject>& Data)
-{
-    TSharedRef<FJsonObject> Request = MakeShared<FJsonObject>();
-    Request->SetStringField(TEXT("service"), TEXT("globalFileV3"));
-    Request->SetStringField(TEXT("operation"), Operation);
-    Request->SetObjectField(TEXT("data"), Data);
-
-    FString Output;
-    TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Output);
-    FJsonSerializer::Serialize(Request, Writer);
-
-    // FJsonSerializer does not append a trailing newline, so no stripping needed
-    return Output;
-}
 
 US2SGlobalFileV3::US2SGlobalFileV3() : _generation(0)
 {
@@ -58,7 +43,7 @@ void US2SGlobalFileV3::sysGetFileInfo(const FString& fileId, const US2SCallback&
 {
     TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("fileId"), fileId);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_GET_FILE_INFO"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysGetFileInfo, Data), callback);
 }
 
 void US2SGlobalFileV3::sysGetFileInfoSimple(const FString& folderPath, const FString& filename,
@@ -67,7 +52,7 @@ void US2SGlobalFileV3::sysGetFileInfoSimple(const FString& folderPath, const FSt
     TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("folderPath"), folderPath);
     Data->SetStringField(TEXT("filename"), filename);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_GET_FILE_INFO_SIMPLE"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysGetFileInfoSimple, Data), callback);
 }
 
 void US2SGlobalFileV3::sysCheckFilenameExists(const FString& folderPath, const FString& filename,
@@ -76,7 +61,7 @@ void US2SGlobalFileV3::sysCheckFilenameExists(const FString& folderPath, const F
     TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("folderPath"), folderPath);
     Data->SetStringField(TEXT("filename"), filename);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_CHECK_FILENAME_EXISTS"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysCheckFilenameExists, Data), callback);
 }
 
 void US2SGlobalFileV3::sysCheckFullpathFilenameExists(const FString& fullpathFilename,
@@ -84,14 +69,14 @@ void US2SGlobalFileV3::sysCheckFullpathFilenameExists(const FString& fullpathFil
 {
     TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("fullPathFilename"), fullpathFilename);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_CHECK_FULLPATH_FILENAME_EXISTS"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysCheckFullpathFilenameExists, Data), callback);
 }
 
 void US2SGlobalFileV3::sysGetGlobalCDNUrl(const FString& fileId, const US2SCallback& callback)
 {
     TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("fileId"), fileId);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_GET_GLOBAL_CDN_URL"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysGetGlobalCDNUrl, Data), callback);
 }
 
 void US2SGlobalFileV3::sysGetGlobalFileList(const FString& folderPath, bool recurse,
@@ -100,7 +85,7 @@ void US2SGlobalFileV3::sysGetGlobalFileList(const FString& folderPath, bool recu
     TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("folderPath"), folderPath);
     Data->SetBoolField(TEXT("recurse"), recurse);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_GET_GLOBAL_FILE_LIST"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysGetGlobalFileList, Data), callback);
 }
 
 // --------------------------------------------------------------------------
@@ -119,7 +104,7 @@ void US2SGlobalFileV3::sysMoveToGlobalFile(const FString& userProfileId, const F
     Data->SetStringField(TEXT("globalTreeId"), globalTreeId);
     Data->SetStringField(TEXT("globalFilename"), globalFilename);
     Data->SetBoolField(TEXT("overwriteIfPresent"), overwriteIfPresent);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_MOVE_TO_GLOBAL_FILE"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysMoveToGlobalFile, Data), callback);
 }
 
 void US2SGlobalFileV3::sysCopyGlobalFile(const FString& fileId, int version,
@@ -134,7 +119,7 @@ void US2SGlobalFileV3::sysCopyGlobalFile(const FString& fileId, int version,
     Data->SetNumberField(TEXT("treeVersion"), treeVersion);
     Data->SetStringField(TEXT("newFilename"), newFilename);
     Data->SetBoolField(TEXT("overwriteIfPresent"), overwriteIfPresent);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_COPY_GLOBAL_FILE"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysCopyGlobalFile, Data), callback);
 }
 
 void US2SGlobalFileV3::sysMoveGlobalFile(const FString& fileId, int version,
@@ -149,7 +134,7 @@ void US2SGlobalFileV3::sysMoveGlobalFile(const FString& fileId, int version,
     Data->SetNumberField(TEXT("treeVersion"), treeVersion);
     Data->SetStringField(TEXT("newFilename"), newFilename);
     Data->SetBoolField(TEXT("overwriteIfPresent"), overwriteIfPresent);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_MOVE_GLOBAL_FILE"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysMoveGlobalFile, Data), callback);
 }
 
 void US2SGlobalFileV3::sysDeleteGlobalFile(const FString& fileId, int version,
@@ -159,7 +144,7 @@ void US2SGlobalFileV3::sysDeleteGlobalFile(const FString& fileId, int version,
     Data->SetStringField(TEXT("fileId"), fileId);
     Data->SetNumberField(TEXT("version"), version);
     Data->SetStringField(TEXT("filename"), filename);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_DELETE_GLOBAL_FILE"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysDeleteGlobalFile, Data), callback);
 }
 
 void US2SGlobalFileV3::sysDeleteGlobalFiles(const FString& treeId, const FString& folderPath,
@@ -170,7 +155,7 @@ void US2SGlobalFileV3::sysDeleteGlobalFiles(const FString& treeId, const FString
     Data->SetStringField(TEXT("folderPath"), folderPath);
     Data->SetNumberField(TEXT("treeVersion"), treeVersion);
     Data->SetBoolField(TEXT("recurse"), recurse);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_DELETE_GLOBAL_FILES"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysDeleteGlobalFiles, Data), callback);
 }
 
 // --------------------------------------------------------------------------
@@ -187,7 +172,7 @@ void US2SGlobalFileV3::sysCreateFolder(const FString& folderPath, int treeVersio
     Data->SetStringField(TEXT("name"), name);
     Data->SetStringField(TEXT("desc"), desc);
     Data->SetBoolField(TEXT("createInterimDirectories"), createInterimDirectories);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_CREATE_FOLDER"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysCreateFolder, Data), callback);
 }
 
 void US2SGlobalFileV3::sysMoveFolder(const FString& treeId, int treeVersion,
@@ -200,7 +185,7 @@ void US2SGlobalFileV3::sysMoveFolder(const FString& treeId, int treeVersion,
     Data->SetStringField(TEXT("newFolderPath"), newFolderPath);
     Data->SetStringField(TEXT("updatedName"), updatedName);
     Data->SetBoolField(TEXT("createInterimDirectories"), createInterimDirectories);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_MOVE_FOLDER"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysMoveFolder, Data), callback);
 }
 
 void US2SGlobalFileV3::sysRenameFolder(const FString& treeId, int treeVersion,
@@ -210,14 +195,14 @@ void US2SGlobalFileV3::sysRenameFolder(const FString& treeId, int treeVersion,
     Data->SetStringField(TEXT("treeId"), treeId);
     Data->SetNumberField(TEXT("treeVersion"), treeVersion);
     Data->SetStringField(TEXT("updatedName"), updatedName);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_RENAME_FOLDER"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysRenameFolder, Data), callback);
 }
 
 void US2SGlobalFileV3::sysLookupFolder(const FString& fullFolderPath, const US2SCallback& callback)
 {
     TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
     Data->SetStringField(TEXT("fullFolderPath"), fullFolderPath);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_LOOKUP_FOLDER"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysLookupFolder, Data), callback);
 }
 
 void US2SGlobalFileV3::sysDeleteFolder(const FString& treeId, const FString& folderPath,
@@ -228,7 +213,7 @@ void US2SGlobalFileV3::sysDeleteFolder(const FString& treeId, const FString& fol
     Data->SetStringField(TEXT("folderPath"), folderPath);
     Data->SetNumberField(TEXT("treeVersion"), treeVersion);
     Data->SetBoolField(TEXT("force"), force);
-    _s2s->request(BuildGFV3Request(TEXT("SYS_DELETE_FOLDER"), Data), callback);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysDeleteFolder, Data), callback);
 }
 
 // --------------------------------------------------------------------------
@@ -248,7 +233,7 @@ void US2SGlobalFileV3::uploadGlobalFile(const FString& treeId, const FString& fi
 
     int32 gen = _generation.load();
 
-    _s2s->request(BuildGFV3Request(TEXT("SYS_PREPARE_UPLOAD"), Data),
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysPrepareUpload, Data),
         [this, gen, filename, fileData, callback](const FString& result)
         {
             if (gen != _generation) return; // stale after disconnect
@@ -259,19 +244,19 @@ void US2SGlobalFileV3::uploadGlobalFile(const FString& treeId, const FString& fi
             if (FJsonSerializer::Deserialize(Reader, JsonMsg) && JsonMsg->HasField(TEXT("data")))
             {
                 TSharedPtr<FJsonObject> JsonData = JsonMsg->GetObjectField(TEXT("data"));
-                if (JsonData->HasField(TEXT("fileDetails")))
+                if (JsonData->HasField(S2SOperationParam::FileDetails))
                 {
-                    TSharedPtr<FJsonObject> Details = JsonData->GetObjectField(TEXT("fileDetails"));
-                    FString UploadId = Details->GetStringField(TEXT("uploadId"));
+                    TSharedPtr<FJsonObject> Details = JsonData->GetObjectField(S2SOperationParam::FileDetails);
+                    FString UploadId = Details->GetStringField(S2SOperationParam::UploadId);
 
                     FString FullUploadUrl = _uploadUrl
                         + TEXT("?gameId=") + _s2s->getSessionData().appId
                         + TEXT("&uploadId=") + UploadId;
 
                     // Use server-supplied uploadUrl if present (mirrors C++ reference behaviour)
-                    if (Details->HasField(TEXT("uploadUrl")))
+                    if (Details->HasField(S2SOperationParam::UploadUrl))
                     {
-                        FString ServerUrl = Details->GetStringField(TEXT("uploadUrl"));
+                        FString ServerUrl = Details->GetStringField(S2SOperationParam::UploadUrl);
                         if (!ServerUrl.IsEmpty())
                         {
                             if (ServerUrl.StartsWith(TEXT("http")))

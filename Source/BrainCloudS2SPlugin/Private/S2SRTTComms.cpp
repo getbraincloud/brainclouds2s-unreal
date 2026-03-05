@@ -1,7 +1,9 @@
 // Copyright 2026 bitHeads, Inc. All Rights Reserved.
 
-
 #include "S2SRTTComms.h"
+#include "S2SServiceName.h"
+#include "S2SServiceOperation.h"
+#include "S2SOperationParam.h"
 #include <Kismet/GameplayStatics.h>
 #include "ConvertUtilities.h"
 #include "JsonUtil.h"
@@ -70,8 +72,8 @@ void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& 
 
         TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject);
 
-        JsonObject->SetStringField("service", "rttRegistration");
-        JsonObject->SetStringField("operation", "REQUEST_SYSTEM_CONNECTION");
+        JsonObject->SetStringField(TEXT("service"),   S2SServiceName::RTTRegistration);
+        JsonObject->SetStringField(TEXT("operation"), S2SServiceOperation::RequestSystemConnection);
 
         FString JsonString;
         TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonString);
@@ -91,17 +93,17 @@ void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& 
                 if (res)
                 {
                     TSharedPtr<FJsonObject> jsonData = jsonPacket->GetObjectField(TEXT("data"));
-                    TArray<TSharedPtr<FJsonValue>> endpoints = jsonData->GetArrayField(TEXT("endpoints"));
-                    m_rttHeaders = jsonData->GetObjectField(TEXT("auth"));
+                    TArray<TSharedPtr<FJsonValue>> endpoints = jsonData->GetArrayField(S2SOperationParam::Endpoints);
+                    m_rttHeaders = jsonData->GetObjectField(S2SOperationParam::Auth);
 
                     //setup socket connection
                     TSharedPtr<FJsonObject> endpoint = endpoints[0]->AsObject();
-                    bool sslEnabled = endpoint->GetBoolField(TEXT("ssl"));
+                    bool sslEnabled = endpoint->GetBoolField(S2SOperationParam::Ssl);
 
                     FString url = (sslEnabled ? TEXT("wss://") : TEXT("ws://"));
-                    url += endpoint->GetStringField(TEXT("host"));
-                    url += ":";
-                    url += FString::Printf(TEXT("%d"), endpoint->GetIntegerField(TEXT("port")));
+                    url += endpoint->GetStringField(S2SOperationParam::Host);
+                    url += TEXT(":");
+                    url += FString::Printf(TEXT("%d"), endpoint->GetIntegerField(S2SOperationParam::Port));
                     url += getUrlQueryParameters();
 
                     UE_LOG(S2SWebSocket, Log, TEXT("Setting up web socket with url %s "), *url);
@@ -229,28 +231,29 @@ void US2SRTTComms::webSocket_OnMessage(const TArray<uint8>& in_data)
     UE_LOG(S2SWebSocket, Log, TEXT("RECV: %s "), *parsedMessage);
 
     TSharedPtr<FJsonObject> jsonData = JsonUtil::jsonStringToValue(parsedMessage);
-    FString service = jsonData->HasField(TEXT("service")) ? jsonData->GetStringField(TEXT("service")) : "";
-    FString operation = jsonData->HasField(TEXT("operation")) ? jsonData->GetStringField(TEXT("operation")) : "";
+    FString service   = jsonData->HasField(TEXT("service"))   ? jsonData->GetStringField(TEXT("service"))   : TEXT("");
+    FString operation = jsonData->HasField(TEXT("operation")) ? jsonData->GetStringField(TEXT("operation")) : TEXT("");
     TSharedPtr<FJsonObject> innerData = nullptr;
     bool bIsInnerDataValid = jsonData->HasTypedField<EJson::Object>(TEXT("data"));
 
     if (bIsInnerDataValid)
         innerData = jsonData->GetObjectField(TEXT("data"));
 
-    if (operation == "HEARTBEAT") {
+    if (operation == S2SServiceOperation::Heartbeat)
+    {
         m_heartBeatRecv = true;
     }
 
-    if (operation == "CONNECT")
+    if (operation == S2SServiceOperation::Connect)
     {
         int32 heartBeat = INITIAL_HEARTBEAT_TIME;
-        if (bIsInnerDataValid && innerData->HasField(TEXT("heartbeatSeconds")))
+        if (bIsInnerDataValid && innerData->HasField(S2SOperationParam::HeartbeatSeconds))
         {
-            heartBeat = innerData->GetIntegerField(TEXT("heartbeatSeconds"));
+            heartBeat = innerData->GetIntegerField(S2SOperationParam::HeartbeatSeconds);
         }
-        else if (bIsInnerDataValid && innerData->HasField(TEXT("wsHeartbeatSecs")))
+        else if (bIsInnerDataValid && innerData->HasField(S2SOperationParam::WsHeartbeatSecs))
         {
-            heartBeat = innerData->GetIntegerField(TEXT("wsHeartbeatSecs"));
+            heartBeat = innerData->GetIntegerField(S2SOperationParam::WsHeartbeatSecs);
         }
 
         isRTTEnabled = true;
@@ -258,26 +261,26 @@ void US2SRTTComms::webSocket_OnMessage(const TArray<uint8>& in_data)
 
         rttEnabledSuccessCallback(parsedMessage);
     }
-    else if (operation == "DISCONNECT")
+    else if (operation == S2SServiceOperation::Disconnect)
     {
         m_disconnectedWithReason = true;
-        m_disconnectJson->SetStringField("reason", innerData->GetStringField(TEXT("reason")));
-        m_disconnectJson->SetNumberField("reasonCode", innerData->GetNumberField(TEXT("reasonCode")));
-        m_disconnectJson->SetStringField("severity", "ERROR");
+        m_disconnectJson->SetStringField(S2SOperationParam::Reason,     innerData->GetStringField(S2SOperationParam::Reason));
+        m_disconnectJson->SetNumberField(TEXT("reasonCode"),            innerData->GetNumberField(TEXT("reasonCode")));
+        m_disconnectJson->SetStringField(S2SOperationParam::Severity,   TEXT("ERROR"));
     }
 
     processRTTCallback(parsedMessage);
 
     if (bIsInnerDataValid)
     {
-        if (innerData->HasField(TEXT("cxId")))
+        if (innerData->HasField(S2SOperationParam::CxId))
         {
-            m_cxId = innerData->GetStringField(TEXT("cxId"));
+            m_cxId = innerData->GetStringField(S2SOperationParam::CxId);
         }
 
-        if (innerData->HasField(TEXT("evs")))
+        if (innerData->HasField(S2SOperationParam::Evs))
         {
-            m_eventServer = innerData->GetStringField(TEXT("evs"));
+            m_eventServer = innerData->GetStringField(S2SOperationParam::Evs);
         }
     }
 
@@ -324,20 +327,20 @@ FString US2SRTTComms::buildConnectionRequest()
     FString appId = m_s2sClient ? m_s2sClient->getSessionData().appId : TEXT("");
 
     TSharedRef<FJsonObject> sysJson = MakeShareable(new FJsonObject());
-    sysJson->SetStringField("platform", platform);
-    sysJson->SetStringField("protocol", "ws");
+    sysJson->SetStringField(S2SOperationParam::Platform, platform);
+    sysJson->SetStringField(S2SOperationParam::Protocol, TEXT("ws"));
 
     TSharedRef<FJsonObject> jsonData = MakeShareable(new FJsonObject());
-    jsonData->SetStringField("appId", appId);
-    jsonData->SetStringField("sessionId", m_s2sClient->getSessionID());
-    jsonData->SetStringField("profileId", "s");
-    jsonData->SetObjectField("system", sysJson);
-    jsonData->SetObjectField("auth", m_rttHeaders);
+    jsonData->SetStringField(S2SOperationParam::AppId,     appId);
+    jsonData->SetStringField(S2SOperationParam::SessionId, m_s2sClient->getSessionID());
+    jsonData->SetStringField(S2SOperationParam::ProfileId, TEXT("s"));
+    jsonData->SetObjectField(S2SOperationParam::System,    sysJson);
+    jsonData->SetObjectField(S2SOperationParam::Auth,      m_rttHeaders);
 
     TSharedPtr<FJsonObject> json = MakeShareable(new FJsonObject());
-    json->SetStringField("service", "RTT");
-    json->SetStringField("operation", "CONNECT");
-    json->SetObjectField("data", jsonData);
+    json->SetStringField(TEXT("service"),   S2SServiceName::RTT);
+    json->SetStringField(TEXT("operation"), S2SServiceOperation::Connect);
+    json->SetObjectField(TEXT("data"),      jsonData);
 
     FString JsonString;
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonString);
@@ -349,9 +352,9 @@ FString US2SRTTComms::buildConnectionRequest()
 FString US2SRTTComms::buildHeartbeatRequest()
 {
     TSharedRef<FJsonObject> json = MakeShareable(new FJsonObject());
-    json->SetStringField("service", "RTT");
-    json->SetStringField("operation", "HEARTBEAT");
-    json->SetObjectField("data", nullptr);
+    json->SetStringField(TEXT("service"),   S2SServiceName::RTT);
+    json->SetStringField(TEXT("operation"), S2SServiceOperation::Heartbeat);
+    json->SetObjectField(TEXT("data"),      nullptr);
 
     return JsonUtil::jsonValueToString(json);
 }
