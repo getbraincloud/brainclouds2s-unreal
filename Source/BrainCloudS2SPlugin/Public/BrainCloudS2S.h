@@ -4,16 +4,21 @@
 
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
+#include "BrainCloudS2STypes.h"
 
 #include <functional>
 #include <memory>
 #include <string>
 
+#include "BrainCloudS2S.generated.h"
+
 /**
- * 
+ *
  */
 
 class IHttpRequest;
+class US2SGlobalFileV3;
+class US2SRTTComms;
 
 using US2SCallback = std::function<void(const FString&)>;
 
@@ -37,21 +42,42 @@ struct US2SSessionData
 };
 
 
-
-class BRAINCLOUDS2SPLUGIN_API UBrainCloudS2S
+UCLASS(BlueprintType)
+class BRAINCLOUDS2SPLUGIN_API UBrainCloudS2S : public UObject
 {
+    GENERATED_BODY()
+
 public:
 	UBrainCloudS2S();
 
-    //Alternate constructor for those using MakeShareable
-    UBrainCloudS2S(const FString& appId,
-        const FString& serverName,
-        const FString& serverSecret,
-        const FString& url,
-        bool autoAuth
-    );
-
 	virtual ~UBrainCloudS2S();
+
+    // -----------------------------------------------------------------------
+    // Factory
+    // -----------------------------------------------------------------------
+
+    /**
+     * Creates and initializes a new S2S context. This is the recommended way
+     * to create an instance from both C++ and Blueprints.
+     *
+     * @param AppId          Application ID
+     * @param ServerName     Server name
+     * @param ServerSecret   Server secret key
+     * @param Url            The server url to send the request to.
+     * @param bAutoAuth      When true, authentication happens automatically on the first request.
+     * @return A fully initialized UBrainCloudS2S instance.
+     */
+    UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Create S2S Context"))
+    static UBrainCloudS2S* CreateS2SContext(
+        const FString& AppId,
+        const FString& ServerName,
+        const FString& ServerSecret,
+        const FString& Url,
+        bool bAutoAuth);
+
+    // -----------------------------------------------------------------------
+    // Original C++ API (signatures preserved)
+    // -----------------------------------------------------------------------
 
     /*
      * INIT - used to initialize s2s app settings if needed.
@@ -73,6 +99,13 @@ public:
      * @param enabled Will log if true. Default false
      */
     void setLogEnabled(bool enabled);
+
+    /*
+     * Set whether sensitive fields (e.g. serverSecret) are obfuscated in logs.
+     * Obfuscation is enabled by default. Disable only for local debugging.
+     * @param enabled Will obfuscate if true. Default true
+     */
+    void setLogObfuscationEnabled(bool enabled);
 
     /*
      * Send an S2S request.
@@ -109,6 +142,45 @@ public:
 
     US2SSessionData getSessionData();
 
+    // -----------------------------------------------------------------------
+    // Service accessors
+    // -----------------------------------------------------------------------
+
+    /** Returns the Global File V3 service owned by this context. */
+    UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Get Global File V3"))
+    US2SGlobalFileV3* GetGlobalFileV3() const;
+
+    /** Returns the RTT communications service owned by this context. */
+    UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Get RTT Comms"))
+    US2SRTTComms* GetRTTComms() const;
+
+    // -----------------------------------------------------------------------
+    // Blueprint-callable wrappers
+    // -----------------------------------------------------------------------
+
+    /** Blueprint-callable version of runCallbacks(). Drives all service callbacks and HTTP completions. */
+    UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Run Callbacks"))
+    void RunCallbacks();
+
+    UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Set Log Enabled"))
+    void S2S_SetLogEnabled(bool bEnabled);
+
+    /** Enables or disables obfuscation of sensitive fields (e.g. serverSecret) in logs. On by default. */
+    UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Set Log Obfuscation Enabled"))
+    void S2S_SetLogObfuscationEnabled(bool bEnabled);
+
+    UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Request"))
+    void S2S_Request(const FString& JsonString, const FS2SResponseDelegate& Callback);
+
+    UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Authenticate"))
+    void S2S_Authenticate(const FS2SResponseDelegate& Callback);
+
+    UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S", meta = (DisplayName = "Disconnect"))
+    void S2S_Disconnect();
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "BrainCloud|S2S", meta = (DisplayName = "Get Session ID"))
+    FString S2S_GetSessionID() const;
+
 private:
     struct Request
     {
@@ -125,13 +197,29 @@ private:
 
     void CheckAuthCredentials(TSharedPtr<FJsonObject> authResponse);
 
+    /** Helper: wraps an FS2SResponseDelegate into a US2SCallback. */
+    static US2SCallback WrapBPDelegate(const FS2SResponseDelegate& Delegate);
+
+    /** Creates and initializes owned service sub-objects. Called after Init(). */
+    void InitServices();
+
+    /** Replaces the value of sensitive JSON fields (e.g. serverSecret) with "***". */
+    static FString RedactSensitiveJson(const FString& Json);
+
     TSharedPtr<Request> _activeRequest;
     TSharedPtr<Request> _nullActiveRequest;
     bool _autoAuth = false;
     bool _logEnabled = false;
+    bool _logObfuscationEnabled = true;
 
     US2SSessionData _sessionData;
 
     TArray<TSharedPtr<Request>> _requestQueue;
-};
 
+    // Owned service instances
+    UPROPERTY()
+    US2SGlobalFileV3* _globalFileV3 = nullptr;
+
+    UPROPERTY()
+    US2SRTTComms* _rttComms = nullptr;
+};
