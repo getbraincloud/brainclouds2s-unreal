@@ -1,5 +1,11 @@
 // Copyright 2026 bitHeads, Inc. All Rights Reserved.
 #include "BrainCloudS2S.h"
+#include "S2SGlobalFileV3.h"
+#include "S2SRTTComms.h"
+#include "S2SServiceName.h"
+#include "S2SServiceOperation.h"
+#include "S2SOperationParam.h"
+#include "S2SRequestBuilder.h"
 #include "Logging/LogMacros.h"
 #include "Http.h"
 #include "Json.h"
@@ -19,21 +25,6 @@ UBrainCloudS2S::UBrainCloudS2S()
 {
 }
 
-UBrainCloudS2S::UBrainCloudS2S(const FString& appId,
-    const FString& serverName,
-    const FString& serverSecret,
-    const FString& url,
-    bool autoAuth)
-{
-    _sessionData.appId = appId;
-    _sessionData.serverName = serverName;
-    _sessionData.serverSecret = serverSecret;
-    _sessionData.url = url;
-    _sessionData.state = S2SState::Disconnected;
-    _autoAuth = autoAuth;
-    _sessionData.heartbeatInterval = HEARTBEAT_INTERVALE_S;
-}
-
 UBrainCloudS2S::~UBrainCloudS2S()
 {
     for (int32 i = 0; i < _requestQueue.Num(); ++i)
@@ -44,6 +35,22 @@ UBrainCloudS2S::~UBrainCloudS2S()
         }
     }
     _requestQueue.Empty();
+}
+
+// -----------------------------------------------------------------------
+// Factory
+// -----------------------------------------------------------------------
+
+UBrainCloudS2S* UBrainCloudS2S::CreateS2SContext(
+    const FString& AppId,
+    const FString& ServerName,
+    const FString& ServerSecret,
+    const FString& Url,
+    bool bAutoAuth)
+{
+    UBrainCloudS2S* Context = NewObject<UBrainCloudS2S>();
+    Context->Init(AppId, ServerName, ServerSecret, Url, bAutoAuth);
+    return Context;
 }
 
 void UBrainCloudS2S::Init(const FString& appId,
@@ -59,6 +66,38 @@ void UBrainCloudS2S::Init(const FString& appId,
     _autoAuth = autoAuth;
     _sessionData.state = S2SState::Disconnected;
     _sessionData.heartbeatInterval = HEARTBEAT_INTERVALE_S;
+
+    InitServices();
+}
+
+void UBrainCloudS2S::InitServices()
+{
+    if (!_globalFileV3)
+    {
+        _globalFileV3 = NewObject<US2SGlobalFileV3>(this);
+    }
+    _globalFileV3->SetS2SContext(this);
+    _globalFileV3->init(_sessionData.url);
+
+    if (!_rttComms)
+    {
+        _rttComms = NewObject<US2SRTTComms>(this);
+    }
+    _rttComms->SetS2SContext(this);
+}
+
+// -----------------------------------------------------------------------
+// Service accessors
+// -----------------------------------------------------------------------
+
+US2SGlobalFileV3* UBrainCloudS2S::GetGlobalFileV3() const
+{
+    return _globalFileV3;
+}
+
+US2SRTTComms* UBrainCloudS2S::GetRTTComms() const
+{
+    return _rttComms;
 }
 
 void UBrainCloudS2S::authenticate(const US2SCallback& callback)
@@ -66,7 +105,14 @@ void UBrainCloudS2S::authenticate(const US2SCallback& callback)
     if (_sessionData.state != S2SState::Authenticated)
     {
         _sessionData.state = S2SState::Authenticating;
-        FString jsonAuthString = "{\"service\":\"authenticationV2\",\"operation\":\"AUTHENTICATE\",\"data\":{\"appId\":\"" + _sessionData.appId + "\",\"serverName\":\"" + _sessionData.serverName + "\",\"serverSecret\":\"" + _sessionData.serverSecret + "\"}}";
+
+        TSharedRef<FJsonObject> AuthData = MakeShared<FJsonObject>();
+        AuthData->SetStringField(S2SOperationParam::AppId,        _sessionData.appId);
+        AuthData->SetStringField(S2SOperationParam::ServerName,   _sessionData.serverName);
+        AuthData->SetStringField(S2SOperationParam::ServerSecret, _sessionData.serverSecret);
+        const FString jsonAuthString = S2SRequestBuilder::Build(
+            S2SServiceName::AuthenticationV2, S2SServiceOperation::Authenticate, AuthData);
+
         TSharedPtr<Request> pAuthRequest(new Request{
             jsonAuthString,
             callback,
@@ -88,6 +134,14 @@ void UBrainCloudS2S::disconnect()
     _sessionData.packetId = 0;
     _sessionData.sessionId = "";
 
+    if (_globalFileV3)
+    {
+        _globalFileV3->disconnect();
+    }
+    if (_rttComms)
+    {
+        _rttComms->disconnect();
+    }
 }
 
 FString UBrainCloudS2S::getSessionID()
@@ -105,9 +159,36 @@ void UBrainCloudS2S::setLogEnabled(bool enabled)
     _logEnabled = enabled;
 }
 
+void UBrainCloudS2S::setLogObfuscationEnabled(bool enabled)
+{
+    _logObfuscationEnabled = enabled;
+}
+
+FString UBrainCloudS2S::RedactSensitiveJson(const FString& Json)
+{
+    // Fields whose values should be replaced with *** in log output
+    static const TArray<FString> SensitiveKeys = { TEXT("serverSecret") };
+
+    FString Result = Json;
+    for (const FString& Key : SensitiveKeys)
+    {
+        const FString SearchFor = TEXT("\"") + Key + TEXT("\":\"");
+        int32 KeyStart = Result.Find(SearchFor, ESearchCase::CaseSensitive);
+        if (KeyStart == INDEX_NONE) continue;
+
+        const int32 ValueStart = KeyStart + SearchFor.Len();
+        const int32 ValueEnd = Result.Find(TEXT("\""), ESearchCase::CaseSensitive, ESearchDir::FromStart, ValueStart);
+        if (ValueEnd == INDEX_NONE) continue;
+
+        Result = Result.Left(ValueStart) + TEXT("***") + Result.Mid(ValueEnd);
+    }
+    return Result;
+}
+
 void UBrainCloudS2S::sendHeartbeat()
 {
-    FString jsonHeartbeatString = "{\"service\":\"heartbeat\",\"operation\":\"HEARTBEAT\"}";
+    const FString jsonHeartbeatString = S2SRequestBuilder::Build(
+        S2SServiceName::Heartbeat, S2SServiceOperation::Heartbeat);
     TSharedPtr<Request> pAuthRequest(new Request{
         jsonHeartbeatString,
         std::bind(&UBrainCloudS2S::onHeartbeatCallback, this, std::placeholders::_1),
@@ -128,7 +209,8 @@ void UBrainCloudS2S::queueRequest(const TSharedPtr<Request>& pRequest)
 
     if (_logEnabled)
     {
-        UE_LOG(LogBrainCloudS2S, Log, TEXT("Sending request:%s\n"), *dataString);
+        const FString LogString = _logObfuscationEnabled ? RedactSensitiveJson(dataString) : dataString;
+        UE_LOG(LogBrainCloudS2S, Log, TEXT("Sending request:%s\n"), *LogString);
     }
 
     pRequest->pHTTPRequest = FHttpModule::Get().CreateRequest();
@@ -143,8 +225,9 @@ void UBrainCloudS2S::queueRequest(const TSharedPtr<Request>& pRequest)
 
 void UBrainCloudS2S::request(const FString& jsonString, const US2SCallback& callback)
 {
-    // If autoAuth is on 
-    UE_LOG(LogBrainCloudS2S, Log, TEXT("[S2SRequest] autoAuth: %s \n"), _autoAuth ? TEXT("true") : TEXT("false"));
+    // If autoAuth is on
+    if (_logEnabled)
+        UE_LOG(LogBrainCloudS2S, Log, TEXT("[S2SRequest] autoAuth: %s"), _autoAuth ? TEXT("true") : TEXT("false"));
     if (_autoAuth)
     {
         if (_sessionData.state != S2SState::Authenticated && !_requestQueue.Num())
@@ -185,17 +268,16 @@ void UBrainCloudS2S::onHeartbeatCallback(const FString& jsonString)
 
 void UBrainCloudS2S::CheckAuthCredentials(TSharedPtr<FJsonObject> authResponse)
 {
-    if (authResponse && authResponse->HasField("data"))
+    if (authResponse && authResponse->HasField(TEXT("data")))
     {
-        const auto& pData = authResponse->GetObjectField("data");
-        if (pData->HasField("heartbeatSeconds"))
+        const auto& pData = authResponse->GetObjectField(TEXT("data"));
+        if (pData->HasField(S2SOperationParam::HeartbeatSeconds))
         {
-            _sessionData.heartbeatInterval = pData->GetNumberField("heartbeatSeconds");
-            //_heartbeatInverval = 300;
+            _sessionData.heartbeatInterval = pData->GetNumberField(S2SOperationParam::HeartbeatSeconds);
         }
-        if (pData->HasField("sessionId"))
+        if (pData->HasField(S2SOperationParam::SessionId))
         {
-            _sessionData.sessionId = pData->GetStringField("sessionId");
+            _sessionData.sessionId = pData->GetStringField(S2SOperationParam::SessionId);
         }
         _sessionData.heartbeatStartTime = FPlatformTime::Seconds();
         _sessionData.state = S2SState::Authenticated;
@@ -243,9 +325,6 @@ void UBrainCloudS2S::runCallbacks()
     }
     else
     {
-        if(_logEnabled)
-            UE_LOG(LogBrainCloudS2S, Log, TEXT("Number of Waiting Requests, %d"), _requestQueue.Num()); //Check num request in queue
-
         //auto pActiveRequest = _requestQueue[0];
         auto pActiveRequest = _activeRequest;
         EHttpRequestStatus::Type status = pActiveRequest->pHTTPRequest->GetStatus();
@@ -265,9 +344,9 @@ void UBrainCloudS2S::runCallbacks()
                 TSharedPtr<FJsonObject> jsonMessage;
                 if (FJsonSerializer::Deserialize(reader, jsonPacket))
                 {
-                    if (jsonPacket->HasField("messageResponses"))
+                    if (jsonPacket->HasField(S2SOperationParam::MessageResponses))
                     {
-                        const auto& messages = jsonPacket->GetArrayField("messageResponses");
+                        const auto& messages = jsonPacket->GetArrayField(S2SOperationParam::MessageResponses);
                         if (messages.Num())
                         {
                             jsonMessage = messages[0]->AsObject();
@@ -314,7 +393,7 @@ void UBrainCloudS2S::runCallbacks()
                     // If it's a session expired, we disconnect
                     if (jsonMessage && jsonMessage->HasField("reason_code"))
                     {
-                        if (jsonMessage->GetIntegerField("reason_code") == SERVER_SESSION_EXPIRED)
+                        if (jsonMessage->GetIntegerField(S2SOperationParam::ReasonCode) == SERVER_SESSION_EXPIRED)
                         {
                             // Disconect then redo the request. It will try to re-authenticate
                             UE_LOG(LogBrainCloudS2S, Warning, TEXT("S2S session expired"));
@@ -392,4 +471,77 @@ void UBrainCloudS2S::runCallbacks()
             _sessionData.heartbeatStartTime = now;
         }
     }
+
+    // Drive service callbacks
+    if (_globalFileV3)
+    {
+        _globalFileV3->runCallbacks();
+    }
+    if (_rttComms)
+    {
+        _rttComms->runCallbacks();
+    }
+}
+
+// -----------------------------------------------------------------------
+// Blueprint-callable RunCallbacks (uppercase, calls lowercase runCallbacks)
+// -----------------------------------------------------------------------
+
+void UBrainCloudS2S::RunCallbacks()
+{
+    runCallbacks();
+}
+
+// -----------------------------------------------------------------------
+// Blueprint wrapper helper
+// -----------------------------------------------------------------------
+
+US2SCallback UBrainCloudS2S::WrapBPDelegate(const FS2SResponseDelegate& Delegate)
+{
+    FS2SResponseDelegate DelegateCopy = Delegate;
+    return [DelegateCopy](const FString& JsonResponse)
+    {
+        bool bSuccess = false;
+        TSharedRef<TJsonReader<TCHAR>> Reader = TJsonReaderFactory<TCHAR>::Create(JsonResponse);
+        TSharedPtr<FJsonObject> JsonObj;
+        if (FJsonSerializer::Deserialize(Reader, JsonObj) && JsonObj->HasField(TEXT("status")))
+        {
+            bSuccess = (JsonObj->GetIntegerField(TEXT("status")) == 200);
+        }
+        DelegateCopy.ExecuteIfBound(bSuccess, JsonResponse);
+    };
+}
+
+// -----------------------------------------------------------------------
+// Blueprint wrappers
+// -----------------------------------------------------------------------
+
+void UBrainCloudS2S::S2S_SetLogEnabled(bool bEnabled)
+{
+    setLogEnabled(bEnabled);
+}
+
+void UBrainCloudS2S::S2S_SetLogObfuscationEnabled(bool bEnabled)
+{
+    setLogObfuscationEnabled(bEnabled);
+}
+
+void UBrainCloudS2S::S2S_Request(const FString& JsonString, const FS2SResponseDelegate& Callback)
+{
+    request(JsonString, WrapBPDelegate(Callback));
+}
+
+void UBrainCloudS2S::S2S_Authenticate(const FS2SResponseDelegate& Callback)
+{
+    authenticate(WrapBPDelegate(Callback));
+}
+
+void UBrainCloudS2S::S2S_Disconnect()
+{
+    disconnect();
+}
+
+FString UBrainCloudS2S::S2S_GetSessionID() const
+{
+    return _sessionData.sessionId;
 }

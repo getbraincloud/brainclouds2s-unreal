@@ -1,7 +1,9 @@
 // Copyright 2026 bitHeads, Inc. All Rights Reserved.
 
-
 #include "S2SRTTComms.h"
+#include "S2SServiceName.h"
+#include "S2SServiceOperation.h"
+#include "S2SOperationParam.h"
 #include <Kismet/GameplayStatics.h>
 #include "ConvertUtilities.h"
 #include "JsonUtil.h"
@@ -22,67 +24,56 @@ US2SRTTComms::~US2SRTTComms()
 {
 }
 
-void US2SRTTComms::InitializeS2S(const FString& appId, const FString& serverName, const FString& serverSecret, const FString& url, bool autoAuth, bool logEnabled)
+void US2SRTTComms::SetS2SContext(UBrainCloudS2S* context)
 {
-    // Create S2S context
-    m_s2sClient = MakeShareable(new UBrainCloudS2S(appId,
-        serverName,
-        serverSecret,
-        url, true));
-
-    this->m_appId = appId;
-
-    m_s2sClient->Init(appId, serverName, serverSecret, url, true);
-
-    // Verbose log
-    m_s2sClient->setLogEnabled(logEnabled);
+    m_s2sClient = context;
 }
 
 void US2SRTTComms::runCallbacks()
 {
-    if (m_s2sClient.IsValid()) {
-        m_s2sClient->runCallbacks();
+    // NOTE: S2S HTTP callbacks are driven by UBrainCloudS2S::runCallbacks(),
+    // which calls us. We only handle RTT heartbeat / disconnect logic here.
+    if (m_s2sClient == nullptr) return;
 
-        if (!isRTTEnabled) return;
+    if (!isRTTEnabled) return;
 
-        if (s2sSocket != nullptr) {
-            float nowMS = FPlatformTime::Seconds();
+    if (s2sSocket != nullptr) {
+        float nowMS = FPlatformTime::Seconds();
 
-            m_timeSinceLastRequest += (nowMS - m_lastNowMS);
-            m_lastNowMS = nowMS;
+        m_timeSinceLastRequest += (nowMS - m_lastNowMS);
+        m_lastNowMS = nowMS;
 
-            if (m_heartBeatSent && m_timeSinceLastRequest >= m_heartBeatIdleSecs)
-            {
-                if (!m_heartBeatRecv) {
-                    UE_LOG(LogBrainCloudS2S, Log, TEXT("RTT: lost heartbeat %f idle"), m_heartBeatIdleSecs);
-                    disconnect();
-                }
-                m_heartBeatSent = false;
-            }
-            if (m_timeSinceLastRequest >= m_heartBeatSecs)
-            {
-                m_timeSinceLastRequest = 0;
-                m_heartBeatSent = true;
-                m_heartBeatRecv = false;
-                send(buildHeartbeatRequest(), false);
-            }
-        }
-
-        if (m_disconnectedWithReason)
+        if (m_heartBeatSent && m_timeSinceLastRequest >= m_heartBeatIdleSecs)
         {
-            disconnect();
+            if (!m_heartBeatRecv) {
+                UE_LOG(LogBrainCloudS2S, Log, TEXT("RTT: lost heartbeat %f idle"), m_heartBeatIdleSecs);
+                disconnect();
+            }
+            m_heartBeatSent = false;
         }
+        if (m_timeSinceLastRequest >= m_heartBeatSecs)
+        {
+            m_timeSinceLastRequest = 0;
+            m_heartBeatSent = true;
+            m_heartBeatRecv = false;
+            send(buildHeartbeatRequest(), false);
+        }
+    }
+
+    if (m_disconnectedWithReason)
+    {
+        disconnect();
     }
 }
 
 void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& OnFailure)
 {
-    if (m_s2sClient.IsValid()) {
+    if (m_s2sClient != nullptr) {
 
         TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject);
 
-        JsonObject->SetStringField("service", "rttRegistration");
-        JsonObject->SetStringField("operation", "REQUEST_SYSTEM_CONNECTION");
+        JsonObject->SetStringField(TEXT("service"),   S2SServiceName::RTTRegistration);
+        JsonObject->SetStringField(TEXT("operation"), S2SServiceOperation::RequestSystemConnection);
 
         FString JsonString;
         TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonString);
@@ -92,7 +83,7 @@ void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& 
             [this, OnSuccess, OnFailure](const FString& result)
             {
                 UE_LOG(LogBrainCloudS2S, Log, TEXT("Got response for connection request: %s"), *result);
-        
+
 
                 TSharedRef<TJsonReader<TCHAR>> reader = TJsonReaderFactory<TCHAR>::Create(result);
                 TSharedPtr<FJsonObject> jsonPacket = MakeShareable(new FJsonObject());
@@ -102,17 +93,17 @@ void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& 
                 if (res)
                 {
                     TSharedPtr<FJsonObject> jsonData = jsonPacket->GetObjectField(TEXT("data"));
-                    TArray<TSharedPtr<FJsonValue>> endpoints = jsonData->GetArrayField(TEXT("endpoints"));
-                    m_rttHeaders = jsonData->GetObjectField(TEXT("auth"));
+                    TArray<TSharedPtr<FJsonValue>> endpoints = jsonData->GetArrayField(S2SOperationParam::Endpoints);
+                    m_rttHeaders = jsonData->GetObjectField(S2SOperationParam::Auth);
 
                     //setup socket connection
                     TSharedPtr<FJsonObject> endpoint = endpoints[0]->AsObject();
-                    bool sslEnabled = endpoint->GetBoolField(TEXT("ssl"));
+                    bool sslEnabled = endpoint->GetBoolField(S2SOperationParam::Ssl);
 
                     FString url = (sslEnabled ? TEXT("wss://") : TEXT("ws://"));
-                    url += endpoint->GetStringField(TEXT("host"));
-                    url += ":";
-                    url += FString::Printf(TEXT("%d"), endpoint->GetIntegerField(TEXT("port")));
+                    url += endpoint->GetStringField(S2SOperationParam::Host);
+                    url += TEXT(":");
+                    url += FString::Printf(TEXT("%d"), endpoint->GetIntegerField(S2SOperationParam::Port));
                     url += getUrlQueryParameters();
 
                     UE_LOG(S2SWebSocket, Log, TEXT("Setting up web socket with url %s "), *url);
@@ -120,7 +111,7 @@ void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& 
                     setupWebSocket(url);
                     rttEnabledSuccessCallback = OnSuccess;
                     rttEnabledFailureCallback = OnFailure;
-            
+
                 }
                 else if(status != 200){
                     OnFailure(result);
@@ -131,31 +122,10 @@ void US2SRTTComms::enableRTT(const US2SCallback& OnSuccess, const US2SCallback& 
 
 void US2SRTTComms::disableRTT()
 {
-    if (s2sSocket->IsConnected()) {
+    if (s2sSocket != nullptr && s2sSocket->IsConnected()) {
         disconnect();
     }
     deregisterRTTCallback();
-}
-
-void US2SRTTComms::request(const FString& requestJson, const US2SCallback& Callback)
-{
-    if (m_s2sClient.IsValid()) {
-        m_s2sClient->request(requestJson, Callback);
-    }
-}
-
-void US2SRTTComms::authenticate(const US2SCallback& callback)
-{
-    if (m_s2sClient.IsValid()) {
-        m_s2sClient->authenticate(callback);
-    }
-}
-
-void US2SRTTComms::authenticate()
-{
-    if (m_s2sClient.IsValid()) {
-        m_s2sClient->authenticate();
-    }
 }
 
 FString US2SRTTComms::getUrlQueryParameters()
@@ -226,7 +196,7 @@ void US2SRTTComms::joinSystemChatChannel(const US2SCallback& callback)
 
 void US2SRTTComms::disconnect()
 {
-    if (!m_s2sClient.IsValid()) return;
+    if (m_s2sClient == nullptr) return;
     if (s2sSocket == nullptr) return;
     if (!s2sSocket->IsConnected()) return;
 
@@ -252,36 +222,38 @@ void US2SRTTComms::disconnect()
     m_heartBeatSent = false;
     m_heartBeatRecv = true;
     m_timeSinceLastRequest = 0;
+    isRTTEnabled = false;
 }
 
 void US2SRTTComms::webSocket_OnMessage(const TArray<uint8>& in_data)
 {
-    FString parsedMessage = ConvertUtilities::BCBytesToString(in_data);
+    FString parsedMessage = ConvertUtilities::BCBytesToString(in_data.GetData(), in_data.Num());
     UE_LOG(S2SWebSocket, Log, TEXT("RECV: %s "), *parsedMessage);
 
     TSharedPtr<FJsonObject> jsonData = JsonUtil::jsonStringToValue(parsedMessage);
-    FString service = jsonData->HasField(TEXT("service")) ? jsonData->GetStringField(TEXT("service")) : "";
-    FString operation = jsonData->HasField(TEXT("operation")) ? jsonData->GetStringField(TEXT("operation")) : "";
+    FString service   = jsonData->HasField(TEXT("service"))   ? jsonData->GetStringField(TEXT("service"))   : TEXT("");
+    FString operation = jsonData->HasField(TEXT("operation")) ? jsonData->GetStringField(TEXT("operation")) : TEXT("");
     TSharedPtr<FJsonObject> innerData = nullptr;
     bool bIsInnerDataValid = jsonData->HasTypedField<EJson::Object>(TEXT("data"));
 
     if (bIsInnerDataValid)
         innerData = jsonData->GetObjectField(TEXT("data"));
 
-    if (operation == "HEARTBEAT") {
+    if (operation == S2SServiceOperation::Heartbeat)
+    {
         m_heartBeatRecv = true;
     }
 
-    if (operation == "CONNECT")
+    if (operation == S2SServiceOperation::Connect)
     {
         int32 heartBeat = INITIAL_HEARTBEAT_TIME;
-        if (bIsInnerDataValid && innerData->HasField(TEXT("heartbeatSeconds")))
+        if (bIsInnerDataValid && innerData->HasField(S2SOperationParam::HeartbeatSeconds))
         {
-            heartBeat = innerData->GetIntegerField(TEXT("heartbeatSeconds"));
+            heartBeat = innerData->GetIntegerField(S2SOperationParam::HeartbeatSeconds);
         }
-        else if (bIsInnerDataValid && innerData->HasField(TEXT("wsHeartbeatSecs")))
+        else if (bIsInnerDataValid && innerData->HasField(S2SOperationParam::WsHeartbeatSecs))
         {
-            heartBeat = innerData->GetIntegerField(TEXT("wsHeartbeatSecs"));
+            heartBeat = innerData->GetIntegerField(S2SOperationParam::WsHeartbeatSecs);
         }
 
         isRTTEnabled = true;
@@ -289,26 +261,26 @@ void US2SRTTComms::webSocket_OnMessage(const TArray<uint8>& in_data)
 
         rttEnabledSuccessCallback(parsedMessage);
     }
-    else if (operation == "DISCONNECT")
+    else if (operation == S2SServiceOperation::Disconnect)
     {
         m_disconnectedWithReason = true;
-        m_disconnectJson->SetStringField("reason", innerData->GetStringField(TEXT("reason")));
-        m_disconnectJson->SetNumberField("reasonCode", innerData->GetNumberField(TEXT("reasonCode")));
-        m_disconnectJson->SetStringField("severity", "ERROR");
+        m_disconnectJson->SetStringField(S2SOperationParam::Reason,     innerData->GetStringField(S2SOperationParam::Reason));
+        m_disconnectJson->SetNumberField(TEXT("reasonCode"),            innerData->GetNumberField(TEXT("reasonCode")));
+        m_disconnectJson->SetStringField(S2SOperationParam::Severity,   TEXT("ERROR"));
     }
 
     processRTTCallback(parsedMessage);
 
     if (bIsInnerDataValid)
     {
-        if (innerData->HasField(TEXT("cxId")))
+        if (innerData->HasField(S2SOperationParam::CxId))
         {
-            m_cxId = innerData->GetStringField(TEXT("cxId"));
+            m_cxId = innerData->GetStringField(S2SOperationParam::CxId);
         }
 
-        if (innerData->HasField(TEXT("evs")))
+        if (innerData->HasField(S2SOperationParam::Evs))
         {
-            m_eventServer = innerData->GetStringField(TEXT("evs"));
+            m_eventServer = innerData->GetStringField(S2SOperationParam::Evs);
         }
     }
 
@@ -316,7 +288,7 @@ void US2SRTTComms::webSocket_OnMessage(const TArray<uint8>& in_data)
 
 void US2SRTTComms::webSocket_OnError(const FString& in_error)
 {
-    if (m_s2sClient.IsValid())
+    if (m_s2sClient != nullptr)
         UE_LOG(S2SWebSocket, Log, TEXT("Error: %s"), *in_error);
 
     rttEnabledFailureCallback(in_error);
@@ -324,7 +296,7 @@ void US2SRTTComms::webSocket_OnError(const FString& in_error)
 
 void US2SRTTComms::webSocket_OnClose()
 {
-    if (m_s2sClient.IsValid())
+    if (m_s2sClient != nullptr)
     {
         UE_LOG(S2SWebSocket, Log, TEXT("Connection closed"));
 
@@ -351,21 +323,24 @@ FString US2SRTTComms::buildConnectionRequest()
 {
     FString platform = UGameplayStatics::GetPlatformName();
 
+    // Get appId from the owning S2S context
+    FString appId = m_s2sClient ? m_s2sClient->getSessionData().appId : TEXT("");
+
     TSharedRef<FJsonObject> sysJson = MakeShareable(new FJsonObject());
-    sysJson->SetStringField("platform", platform);
-    sysJson->SetStringField("protocol", "ws");
+    sysJson->SetStringField(S2SOperationParam::Platform, platform);
+    sysJson->SetStringField(S2SOperationParam::Protocol, TEXT("ws"));
 
     TSharedRef<FJsonObject> jsonData = MakeShareable(new FJsonObject());
-    jsonData->SetStringField("appId", m_appId);
-    jsonData->SetStringField("sessionId", m_s2sClient->getSessionID());
-    jsonData->SetStringField("profileId", "s");
-    jsonData->SetObjectField("system", sysJson);
-    jsonData->SetObjectField("auth", m_rttHeaders);
+    jsonData->SetStringField(S2SOperationParam::AppId,     appId);
+    jsonData->SetStringField(S2SOperationParam::SessionId, m_s2sClient->getSessionID());
+    jsonData->SetStringField(S2SOperationParam::ProfileId, TEXT("s"));
+    jsonData->SetObjectField(S2SOperationParam::System,    sysJson);
+    jsonData->SetObjectField(S2SOperationParam::Auth,      m_rttHeaders);
 
     TSharedPtr<FJsonObject> json = MakeShareable(new FJsonObject());
-    json->SetStringField("service", "RTT");
-    json->SetStringField("operation", "CONNECT");
-    json->SetObjectField("data", jsonData);
+    json->SetStringField(TEXT("service"),   S2SServiceName::RTT);
+    json->SetStringField(TEXT("operation"), S2SServiceOperation::Connect);
+    json->SetObjectField(TEXT("data"),      jsonData);
 
     FString JsonString;
     TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonString);
@@ -377,9 +352,9 @@ FString US2SRTTComms::buildConnectionRequest()
 FString US2SRTTComms::buildHeartbeatRequest()
 {
     TSharedRef<FJsonObject> json = MakeShareable(new FJsonObject());
-    json->SetStringField("service", "RTT");
-    json->SetStringField("operation", "HEARTBEAT");
-    json->SetObjectField("data", nullptr);
+    json->SetStringField(TEXT("service"),   S2SServiceName::RTT);
+    json->SetStringField(TEXT("operation"), S2SServiceOperation::Heartbeat);
+    json->SetObjectField(TEXT("data"),      nullptr);
 
     return JsonUtil::jsonValueToString(json);
 }
@@ -404,4 +379,59 @@ void US2SRTTComms::processRTTCallback(const FString& in_message)
 {
     if (registeredBPCallback != nullptr)
         registeredBPCallback(in_message);
+}
+
+// --------------------------------------------------------------------------
+// Blueprint wrapper helper
+// --------------------------------------------------------------------------
+
+US2SCallback US2SRTTComms::WrapBPDelegate(const FS2SResponseDelegate& Delegate)
+{
+    FS2SResponseDelegate DelegateCopy = Delegate;
+    return [DelegateCopy](const FString& JsonResponse)
+    {
+        // For RTT messages, determine success from the status field if present
+        bool bSuccess = true;
+        TSharedRef<TJsonReader<TCHAR>> Reader = TJsonReaderFactory<TCHAR>::Create(JsonResponse);
+        TSharedPtr<FJsonObject> JsonObj;
+        if (FJsonSerializer::Deserialize(Reader, JsonObj) && JsonObj->HasField(TEXT("status")))
+        {
+            bSuccess = (JsonObj->GetIntegerField(TEXT("status")) == 200);
+        }
+        DelegateCopy.ExecuteIfBound(bSuccess, JsonResponse);
+    };
+}
+
+// --------------------------------------------------------------------------
+// Blueprint wrappers
+// --------------------------------------------------------------------------
+
+void US2SRTTComms::S2S_EnableRTT(const FS2SResponseDelegate& OnSuccess, const FS2SResponseDelegate& OnFailure)
+{
+    enableRTT(WrapBPDelegate(OnSuccess), WrapBPDelegate(OnFailure));
+}
+
+void US2SRTTComms::S2S_DisableRTT()
+{
+    disableRTT();
+}
+
+void US2SRTTComms::S2S_RegisterRTTCallback(const FS2SResponseDelegate& Callback)
+{
+    registerRTTCallback(WrapBPDelegate(Callback));
+}
+
+void US2SRTTComms::S2S_DeregisterRTTCallback()
+{
+    deregisterRTTCallback();
+}
+
+void US2SRTTComms::S2S_Send(const FString& Message, bool bAllowLogging)
+{
+    send(Message, bAllowLogging);
+}
+
+void US2SRTTComms::S2S_Disconnect()
+{
+    disconnect();
 }
