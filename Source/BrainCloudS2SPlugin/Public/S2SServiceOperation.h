@@ -37,7 +37,8 @@ namespace S2SServiceOperation
     static constexpr const TCHAR* SysMoveGlobalFile   = TEXT("SYS_MOVE_GLOBAL_FILE");
     static constexpr const TCHAR* SysDeleteGlobalFile  = TEXT("SYS_DELETE_GLOBAL_FILE");
     static constexpr const TCHAR* SysDeleteGlobalFiles = TEXT("SYS_DELETE_GLOBAL_FILES");
-    static constexpr const TCHAR* SysPrepareUpload     = TEXT("SYS_PREPARE_UPLOAD");
+    static constexpr const TCHAR* SysPrepareUpload      = TEXT("SYS_PREPARE_UPLOAD");
+    static constexpr const TCHAR* SysUploadStream       = TEXT("SYS_UPLOAD_STREAM");
 
     // globalFileV3 — folder management
     static constexpr const TCHAR* SysCreateFolder = TEXT("SYS_CREATE_FOLDER");
