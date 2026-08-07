@@ -334,6 +334,17 @@ void US2SGlobalFileV3::sendFileUpload(const FString& uploadUrl, const FString& f
     HttpRequest->ProcessRequest();
 }
 
+void US2SGlobalFileV3::sysUploadStream(const FString& treeId, const FString& filename,
+    bool overwriteIfPresent, const FString& fileData, const US2SCallback& callback)
+{
+    TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
+    Data->SetStringField(S2SOperationParam::TreeId, treeId);
+    Data->SetStringField(S2SOperationParam::Filename, filename);
+    Data->SetBoolField(S2SOperationParam::OverwriteIfPresent, overwriteIfPresent);
+    Data->SetStringField(S2SOperationParam::FileData, fileData);
+    _s2s->request(S2SRequestBuilder::Build(S2SServiceName::GlobalFileV3, S2SServiceOperation::SysUploadStream, Data), callback);
+}
+
 // --------------------------------------------------------------------------
 // Lifecycle
 // --------------------------------------------------------------------------
@@ -487,4 +498,10 @@ void US2SGlobalFileV3::S2S_SysDeleteFolder(const FString& TreeId, const FString&
     int32 TreeVersion, bool bForce, const FS2SResponseDelegate& Callback)
 {
     sysDeleteFolder(TreeId, FolderPath, TreeVersion, bForce, WrapBPDelegate(Callback));
+}
+
+void US2SGlobalFileV3::S2S_SysUploadStream(const FString& TreeId, const FString& Filename,
+    bool bOverwriteIfPresent, const FString& FileData, const FS2SResponseDelegate& Callback)
+{
+    sysUploadStream(TreeId, Filename, bOverwriteIfPresent, FileData, WrapBPDelegate(Callback));
 }
