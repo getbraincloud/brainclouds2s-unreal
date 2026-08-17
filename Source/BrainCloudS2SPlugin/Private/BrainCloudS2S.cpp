@@ -166,21 +166,24 @@ void UBrainCloudS2S::setLogObfuscationEnabled(bool enabled)
 
 FString UBrainCloudS2S::RedactSensitiveJson(const FString& Json)
 {
-    // Fields whose values should be replaced with *** in log output
-    static const TArray<FString> SensitiveKeys = { TEXT("serverSecret") };
+    static const TArray<FString> SensitiveKeys = {
+        TEXT("secretKey"), TEXT("serverSecret"), TEXT("ApiKey"),
+        TEXT("secret"), TEXT("token"), TEXT("X-RTT-SECRET")
+    };
 
     FString Result = Json;
     for (const FString& Key : SensitiveKeys)
     {
         const FString SearchFor = TEXT("\"") + Key + TEXT("\":\"");
         int32 KeyStart = Result.Find(SearchFor, ESearchCase::CaseSensitive);
-        if (KeyStart == INDEX_NONE) continue;
-
-        const int32 ValueStart = KeyStart + SearchFor.Len();
-        const int32 ValueEnd = Result.Find(TEXT("\""), ESearchCase::CaseSensitive, ESearchDir::FromStart, ValueStart);
-        if (ValueEnd == INDEX_NONE) continue;
-
-        Result = Result.Left(ValueStart) + TEXT("***") + Result.Mid(ValueEnd);
+        while (KeyStart != INDEX_NONE)
+        {
+            const int32 ValueStart = KeyStart + SearchFor.Len();
+            const int32 ValueEnd = Result.Find(TEXT("\""), ESearchCase::CaseSensitive, ESearchDir::FromStart, ValueStart);
+            if (ValueEnd == INDEX_NONE) break;
+            Result = Result.Left(ValueStart) + TEXT("[REDACTED]") + Result.Mid(ValueEnd);
+            KeyStart = Result.Find(SearchFor, ESearchCase::CaseSensitive, ESearchDir::FromStart, ValueStart + 10);
+        }
     }
     return Result;
 }
