@@ -21,6 +21,16 @@ static const int SERVER_SESSION_EXPIRED = 40365;
 // 30 minutes heartbeat interval
 static const int HEARTBEAT_INTERVALE_S = 60 * 30;
 
+// Strip newlines/tabs so pretty-printed JSON fits on a single UE_LOG line
+static FString CollapseJson(const FString& Json)
+{
+    FString Result = Json;
+    Result.ReplaceInline(TEXT("\r\n"), TEXT(""));
+    Result.ReplaceInline(TEXT("\n"), TEXT(""));
+    Result.ReplaceInline(TEXT("\t"), TEXT(""));
+    return Result;
+}
+
 UBrainCloudS2S::UBrainCloudS2S()
 {
 }
@@ -166,21 +176,31 @@ void UBrainCloudS2S::setLogObfuscationEnabled(bool enabled)
 
 FString UBrainCloudS2S::RedactSensitiveJson(const FString& Json)
 {
-    // Fields whose values should be replaced with *** in log output
-    static const TArray<FString> SensitiveKeys = { TEXT("serverSecret") };
+    static const TArray<FString> SensitiveKeys = {
+        TEXT("secretKey"), TEXT("serverSecret"), TEXT("ApiKey"),
+        TEXT("secret"), TEXT("token"), TEXT("X-RTT-SECRET")
+    };
 
     FString Result = Json;
     for (const FString& Key : SensitiveKeys)
     {
-        const FString SearchFor = TEXT("\"") + Key + TEXT("\":\"");
+        // Search for "key": — without the trailing quote so we can skip optional
+        // whitespace between the colon and the opening quote of the value.
+        // This handles both compact ("key":"val") and pretty-printed ("key": "val") JSON.
+        const FString SearchFor = TEXT("\"") + Key + TEXT("\":");
         int32 KeyStart = Result.Find(SearchFor, ESearchCase::CaseSensitive);
-        if (KeyStart == INDEX_NONE) continue;
-
-        const int32 ValueStart = KeyStart + SearchFor.Len();
-        const int32 ValueEnd = Result.Find(TEXT("\""), ESearchCase::CaseSensitive, ESearchDir::FromStart, ValueStart);
-        if (ValueEnd == INDEX_NONE) continue;
-
-        Result = Result.Left(ValueStart) + TEXT("***") + Result.Mid(ValueEnd);
+        while (KeyStart != INDEX_NONE)
+        {
+            // Skip past the colon and any whitespace to find the opening quote
+            int32 Pos = KeyStart + SearchFor.Len();
+            while (Pos < Result.Len() && Result[Pos] != TCHAR('"')) Pos++;
+            if (Pos >= Result.Len()) break;
+            const int32 ValueStart = Pos + 1; // skip opening quote
+            const int32 ValueEnd = Result.Find(TEXT("\""), ESearchCase::CaseSensitive, ESearchDir::FromStart, ValueStart);
+            if (ValueEnd == INDEX_NONE) break;
+            Result = Result.Left(ValueStart) + TEXT("[REDACTED]") + Result.Mid(ValueEnd);
+            KeyStart = Result.Find(SearchFor, ESearchCase::CaseSensitive, ESearchDir::FromStart, ValueStart + 10);
+        }
     }
     return Result;
 }
@@ -210,7 +230,7 @@ void UBrainCloudS2S::queueRequest(const TSharedPtr<Request>& pRequest)
     if (_logEnabled)
     {
         const FString LogString = _logObfuscationEnabled ? RedactSensitiveJson(dataString) : dataString;
-        UE_LOG(LogBrainCloudS2S, Log, TEXT("Sending request:%s\n"), *LogString);
+        UE_LOG(LogBrainCloudS2S, Log, TEXT("Sending request:%s"), *CollapseJson(LogString));
     }
 
     pRequest->pHTTPRequest = FHttpModule::Get().CreateRequest();
@@ -295,7 +315,7 @@ void UBrainCloudS2S::CheckAuthCredentials(TSharedPtr<FJsonObject> authResponse)
 void UBrainCloudS2S::onAuthenticateCallback(const FString& jsonString)
 {
     if(_logEnabled)
-        UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticate result: %s"), *jsonString);
+        UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Authenticate result: %s"), *CollapseJson(jsonString));
 
     if (_sessionData.state != S2SState::Authenticated)
     {
@@ -350,7 +370,7 @@ void UBrainCloudS2S::runCallbacks()
                         if (messages.Num())
                         {
                             jsonMessage = messages[0]->AsObject();
-                            TSharedRef<TJsonWriter<> > writer = TJsonWriterFactory<>::Create(&responseMessage);
+                            TSharedRef<TJsonWriter<>> writer = TJsonWriterFactory<>::Create(&responseMessage);
                             FJsonSerializer::Serialize(jsonMessage.ToSharedRef(), writer);
 
                             if (_sessionData.state != S2SState::Authenticated) // will only do this on an auth call
@@ -370,7 +390,7 @@ void UBrainCloudS2S::runCallbacks()
                 {
                     if (_logEnabled)
                     {
-                        UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Response: %s"), *responseMessage);
+                        UE_LOG(LogBrainCloudS2S, Log, TEXT("S2S Response: %s"), *CollapseJson(responseMessage));
                     }
 
                     // Callback
