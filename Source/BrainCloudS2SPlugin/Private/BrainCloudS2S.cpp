@@ -274,9 +274,9 @@ void UBrainCloudS2S::onHeartbeatCallback(const FString& jsonString)
     TSharedPtr<FJsonObject> pMessage = MakeShareable(new FJsonObject());
     if (FJsonSerializer::Deserialize(reader, pMessage))
     {
-        if (pMessage->HasField("status"))
+        if (pMessage->HasField(TEXT("status")))
         {
-            if (pMessage->GetIntegerField("status") != 200)
+            if (pMessage->GetIntegerField(TEXT("status")) != 200)
             {
                 return; // All good
             }
@@ -411,7 +411,7 @@ void UBrainCloudS2S::runCallbacks()
                 else
                 {
                     // If it's a session expired, we disconnect
-                    if (jsonMessage && jsonMessage->HasField("reason_code"))
+                    if (jsonMessage && jsonMessage->HasField(TEXT("reason_code")))
                     {
                         if (jsonMessage->GetIntegerField(S2SOperationParam::ReasonCode) == SERVER_SESSION_EXPIRED)
                         {
