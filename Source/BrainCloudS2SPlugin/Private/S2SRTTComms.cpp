@@ -304,7 +304,7 @@ void US2SRTTComms::webSocket_OnClose()
         {
             FString response;
             TSharedRef<TJsonWriter<>> disconnectJson = TJsonWriterFactory<>::Create(&response);
-            UE_LOG(S2SWebSocket, Log, TEXT("RTT: Disconnect "), *response);
+            UE_LOG(S2SWebSocket, Log, TEXT("RTT: Disconnect %s"), *response);
         }
     }
     if (!m_disconnectedWithReason)
