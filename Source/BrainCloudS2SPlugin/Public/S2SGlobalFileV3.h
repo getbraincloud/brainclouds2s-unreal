@@ -170,6 +170,26 @@ public:
 		bool overwriteIfPresent, const std::vector<uint8_t>& fileData,
 		const US2SCallback& callback);
 
+	/**
+	 * Uploads a file to brainCloud Global File V3 by sending Base64-encoded file data
+	 * through the S2S JSON dispatcher (SYS_UPLOAD_STREAM operation).
+	 *
+	 * Use this for small-to-medium files. For large files prefer uploadGlobalFile(),
+	 * which uses a two-step SYS_PREPARE_UPLOAD + HTTP multipart approach.
+	 *
+	 * On success the response contains fileDetails: fileId, treeId, fileName,
+	 * fileSize, url, version, etag, and dateUploaded.
+	 *
+	 * @param treeId              Folder tree ID ("_root_" or empty string for root)
+	 * @param filename            Name of the file as it will appear in brainCloud
+	 * @param overwriteIfPresent  When true, replaces any existing file with the same name
+	 * @param fileData            File content encoded as a Base64 string
+	 * @param callback            Invoked with the result JSON string on completion
+	 */
+	void sysUploadStream(const FString& treeId, const FString& filename,
+		bool overwriteIfPresent, const FString& fileData,
+		const US2SCallback& callback);
+
 	// -----------------------------------------------------------------------
 	// Lifecycle (called internally by S2SContext)
 	// -----------------------------------------------------------------------
@@ -248,6 +268,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S|GlobalFileV3", meta = (DisplayName = "Sys Delete Folder"))
 	void S2S_SysDeleteFolder(const FString& TreeId, const FString& FolderPath,
 		int32 TreeVersion, bool bForce, const FS2SResponseDelegate& Callback);
+
+	UFUNCTION(BlueprintCallable, Category = "BrainCloud|S2S|GlobalFileV3", meta = (DisplayName = "Sys Upload Stream"))
+	void S2S_SysUploadStream(const FString& TreeId, const FString& Filename,
+		bool bOverwriteIfPresent, const FString& FileData,
+		const FS2SResponseDelegate& Callback);
 
 private:
 	UPROPERTY()
