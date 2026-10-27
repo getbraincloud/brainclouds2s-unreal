@@ -63,6 +63,7 @@ namespace S2SOperationParam
     static constexpr const TCHAR* FileDetails         = TEXT("fileDetails");
     static constexpr const TCHAR* UploadId            = TEXT("uploadId");
     static constexpr const TCHAR* UploadUrl           = TEXT("uploadUrl");
+    static constexpr const TCHAR* FileData            = TEXT("fileData");
 
     // globalFileV3 — user file move
     static constexpr const TCHAR* UserProfileId    = TEXT("userProfileId");
